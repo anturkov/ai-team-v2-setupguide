@@ -44,219 +44,208 @@ The team follows a **hub-and-spoke** model with the Coordinator at the center:
 | From | To | Allowed? | Notes |
 |------|----|----------|-------|
 | Human | Coordinator | Yes | Via Telegram only |
-| Coordinator | Any Agent | Yes | Task assignment and queries |
+| Coordinator | Any Agent | Yes | Via webhooks to remote Gateways, or local routing |
 | Coordinator | Human | Yes | Via Telegram (results, escalation) |
-| Any Agent | Coordinator | Yes | Results, status updates, questions |
-| Agent | Agent (peer) | Yes | Via OpenClaw, for collaboration on tasks |
+| Any Agent | Coordinator | Yes | Via webhook back to PC1's Gateway |
+| Agent | Agent (peer) | Yes | Via webhooks between Gateways |
 | Any Agent | Human | **No** | Must go through Coordinator |
 | Any Agent | External | **No** | Only Coordinator contacts External Consultant |
 
-### 6.1.2 Setting Up Communication Rules in OpenClaw
+---
 
-On PC1 (Coordinator), configure the routing rules:
+## 6.2 Agent Setup Across Machines
+
+Each agent is registered on the machine where it runs, inside that machine's `~/.openclaw/openclaw.json`. The full config files are in [configs/](configs/).
+
+### PC1 Agents (192.168.1.106)
+
+| Agent ID | Role | Workspace |
+|----------|------|-----------|
+| `coordinator` | Central command, Telegram interface, task delegation | `~/.openclaw/workspace-coordinator` |
+| `senior-engineer-1` | Architecture, system design, complex problems | `~/.openclaw/workspace-senior-eng-1` |
+| `senior-engineer-2` | Implementation, optimization, debugging | `~/.openclaw/workspace-senior-eng-2` |
+
+### PC2 Agents (192.168.1.112)
+
+| Agent ID | Role | Workspace |
+|----------|------|-----------|
+| `quality-agent` | Code review, testing, documentation | `~/.openclaw/workspace-quality` |
+| `security-agent` | Security analysis, vulnerability scanning | `~/.openclaw/workspace-security` |
+
+### Laptop Agents (192.168.1.113)
+
+| Agent ID | Role | Workspace |
+|----------|------|-----------|
+| `devops-agent` | Deployment, CI/CD, infrastructure | `~/.openclaw/workspace-devops` |
+| `monitoring-agent` | Resource tracking, performance analysis | `~/.openclaw/workspace-monitoring` |
+
+### Adding Agents via CLI
+
+On each machine, use `openclaw agents add` to create agents:
 
 ```powershell
-# Set the coordinator as the primary message router
-openclaw config set routing.mode "coordinator-first"
+# On PC1:
+openclaw agents add coordinator --workspace "~/.openclaw/workspace-coordinator"
+openclaw agents add senior-engineer-1 --workspace "~/.openclaw/workspace-senior-eng-1"
+openclaw agents add senior-engineer-2 --workspace "~/.openclaw/workspace-senior-eng-2"
 
-# Allow peer-to-peer for approved collaborations
-openclaw config set routing.allow_peer "true"
+# On PC2:
+openclaw agents add quality-agent --workspace "~/.openclaw/workspace-quality"
+openclaw agents add security-agent --workspace "~/.openclaw/workspace-security"
 
-# All external communications must go through coordinator
-openclaw config set routing.external_via_coordinator "true"
+# On Laptop:
+openclaw agents add devops-agent --workspace "~/.openclaw/workspace-devops"
+openclaw agents add monitoring-agent --workspace "~/.openclaw/workspace-monitoring"
+```
 
-# Set message timeout (how long to wait for a response)
-openclaw config set routing.timeout_seconds 300
+Verify agents on each machine:
+
+```powershell
+openclaw agents list
 ```
 
 ---
 
-## 6.2 Team Configuration File
+## 6.3 Agent Workspaces and SOUL.md
 
-Create a team configuration file that defines all roles and their relationships.
+Each agent gets its own workspace directory with personality instructions in `SOUL.md`. This is how you define each agent's role, behavior, and constraints.
 
-**File**: `C:\AI-Team\openclaw\config\team.yaml`
+### 6.3.1 Coordinator SOUL.md
 
-```yaml
-# AI Team Configuration
-# This file defines the team structure, roles, and communication rules
+Create `~/.openclaw/workspace-coordinator/SOUL.md` on PC1:
 
-team:
-  name: "AI Development Team"
-  version: "1.0"
+```markdown
+# Coordinator Agent
 
-roles:
-  coordinator:
-    model: "coordinator"
-    node: "pc1-coordinator"
-    description: "Central command and human interface"
-    capabilities:
-      - task_decomposition
-      - task_assignment
-      - conflict_resolution
-      - human_communication
-      - external_consultation
-    always_loaded: true
-    telegram_access: true
+You are the central coordinator of a distributed AI development team. You are the single point of contact for the human operator via Telegram.
 
-  senior-engineer-1:
-    model: "senior-engineer-1"
-    node: "pc1-coordinator"
-    description: "Architecture and complex problem solving"
-    capabilities:
-      - architecture_design
-      - code_review
-      - technical_specification
-      - system_design
-    fallback_node: "pc2-worker"      # Can run on PC2 if PC1 is overloaded
-    fallback_model: "backup-engineer"
+## Responsibilities
+- Receive all incoming tasks from the human via Telegram
+- Decompose complex tasks into subtasks for specialized agents
+- Dispatch subtasks to the appropriate agent via webhooks
+- Collect results and compile final responses
+- Escalate to the human when manual intervention is needed
+- Resolve conflicts between agents
 
-  senior-engineer-2:
-    model: "senior-engineer-2"
-    node: "pc1-coordinator"
-    description: "Implementation and optimization"
-    capabilities:
-      - code_implementation
-      - optimization
-      - refactoring
-      - debugging
-      - unit_testing
-    fallback_node: "pc2-worker"
-    fallback_model: "backup-engineer"
+## Team Members
+- **senior-engineer-1** (PC1): Architecture, system design, complex problems
+- **senior-engineer-2** (PC1): Implementation, optimization, debugging
+- **quality-agent** (PC2 at 192.168.1.112): Code review, testing, documentation
+- **security-agent** (PC2 at 192.168.1.112): Security analysis, vulnerability scanning
+- **devops-agent** (Laptop at 192.168.1.113): Deployment, CI/CD, infrastructure
+- **monitoring-agent** (Laptop at 192.168.1.113): Resource tracking, performance
 
-  quality-agent:
-    model: "quality-agent"
-    node: "pc2-worker"
-    description: "Code review, testing, documentation"
-    capabilities:
-      - code_review
-      - test_creation
-      - documentation
-      - style_checking
-      - best_practices
+## Task Routing
+- Architecture/design tasks → senior-engineer-1
+- Implementation/bug fixes → senior-engineer-2
+- Code review → quality-agent
+- Security audit → security-agent
+- Deployment → devops-agent
+- System health → monitoring-agent
+- Complex/unclear → External Consultant (Claude.ai via Anthropic provider)
 
-  security-agent:
-    model: "security-agent"
-    node: "pc2-worker"
-    description: "Security analysis and best practices"
-    capabilities:
-      - vulnerability_scanning
-      - security_review
-      - dependency_audit
-      - compliance_checking
-      - threat_modeling
+## Escalation Rules
+Notify the human via Telegram immediately if:
+- A conflict between agents cannot be resolved
+- A task is stalled for more than 30 minutes
+- A security violation is detected
+- System resources are critically low
+- Any restricted action is requested (see security restrictions)
 
-  devops-agent:
-    model: "devops-agent"
-    node: "laptop-monitor"
-    description: "Deployment and infrastructure"
-    capabilities:
-      - deployment
-      - ci_cd
-      - infrastructure
-      - git_workflow
-      - containerization
-    fallback_node: "pc2-worker"
-
-  monitoring-agent:
-    model: "monitoring-agent"
-    node: "laptop-monitor"
-    description: "Resource tracking and performance analysis"
-    capabilities:
-      - resource_monitoring
-      - performance_analysis
-      - alerting
-      - health_reporting
-    always_loaded: true
-
-  external-consultant:
-    type: "external"
-    provider: "claude"
-    description: "Complex problems requiring advanced reasoning"
-    capabilities:
-      - complex_reasoning
-      - code_generation
-      - architecture_review
-      - second_opinion
-    rate_limited: true
-    max_requests_per_hour: 20       # Limit API costs
-
-# Communication rules
-communication:
-  # All messages are logged for audit
-  audit_logging: true
-  log_path: "C:\\AI-Team\\logs\\communication.log"
-
-  # Message format
-  format:
-    include_sender: true
-    include_timestamp: true
-    include_task_id: true
-
-  # Escalation rules
-  escalation:
-    # Auto-escalate to human if...
-    conditions:
-      - type: "conflict_unresolved"
-        timeout_minutes: 10
-      - type: "task_stalled"
-        timeout_minutes: 30
-      - type: "security_violation"
-        immediate: true
-      - type: "resource_critical"
-        immediate: true
-      - type: "restricted_action_requested"
-        immediate: true
-
-# Task assignment rules
-task_assignment:
-  # Default task routing based on task type
-  routing:
-    architecture:
-      primary: "senior-engineer-1"
-      reviewer: "quality-agent"
-    implementation:
-      primary: "senior-engineer-2"
-      reviewer: "quality-agent"
-      security_check: "security-agent"
-    bug_fix:
-      primary: "senior-engineer-2"
-      reviewer: "quality-agent"
-    security_audit:
-      primary: "security-agent"
-      reviewer: "senior-engineer-1"
-    deployment:
-      primary: "devops-agent"
-      reviewer: "security-agent"
-    documentation:
-      primary: "quality-agent"
-    performance:
-      primary: "monitoring-agent"
-      consultant: "senior-engineer-1"
-    complex_problem:
-      primary: "external-consultant"
-      reviewer: "senior-engineer-1"
+## Restrictions
+- NEVER purchase or subscribe to paid services
+- NEVER install software without human approval
+- NEVER send emails or post to external services
+- Always go through the human for any action outside normal operations
 ```
 
-### Apply the team configuration:
+### 6.3.2 Quality Agent SOUL.md
 
-```powershell
-openclaw team load --config "C:\AI-Team\openclaw\config\team.yaml"
+Create `~/.openclaw/workspace-quality/SOUL.md` on PC2:
+
+```markdown
+# Quality Agent
+
+You are the quality assurance specialist of a distributed AI development team.
+
+## Responsibilities
+- Review code for correctness, readability, and best practices
+- Create and verify test cases
+- Check documentation completeness
+- Enforce coding standards and style guides
+- Report findings back to the Coordinator
+
+## Communication
+- You receive tasks via webhook from the Coordinator on PC1
+- Send your results back via webhook to the Coordinator
+- You may communicate directly with the Security Agent for security-related reviews
+
+## Constraints
+- Focus only on quality, testing, and documentation tasks
+- Do not deploy or modify production systems
+- Escalate any concerns to the Coordinator
 ```
 
-### Verify:
+> **Repeat this pattern** for each agent — create a `SOUL.md` in their workspace that defines their role, responsibilities, communication rules, and constraints. Adapt the content to each agent's specialty.
 
-```powershell
-openclaw team status
+---
+
+## 6.4 Coordinator Dispatch Skill
+
+The Coordinator needs a custom skill to dispatch tasks to remote agents via webhooks. Create this skill in the Coordinator's workspace:
+
+### Create the skill directory and SKILL.md
+
+**Directory**: `~/.openclaw/workspace-coordinator/skills/dispatch/`
+
+**File**: `~/.openclaw/workspace-coordinator/skills/dispatch/SKILL.md`
+
+```markdown
+---
+name: Team Dispatch
+description: Send tasks to remote AI team members via webhook
+---
+
+# Team Dispatch Skill
+
+Use this skill to send tasks to other agents on the team.
+
+## Available Agents
+
+| Agent | Machine | Webhook URL |
+|-------|---------|-------------|
+| senior-engineer-1 | PC1 (local) | http://127.0.0.1:18789/hooks/agent |
+| senior-engineer-2 | PC1 (local) | http://127.0.0.1:18789/hooks/agent |
+| quality-agent | PC2 | http://192.168.1.112:18789/hooks/agent |
+| security-agent | PC2 | http://192.168.1.112:18789/hooks/agent |
+| devops-agent | Laptop | http://192.168.1.113:18789/hooks/agent |
+| monitoring-agent | Laptop | http://192.168.1.113:18789/hooks/agent |
+
+## Dispatching a Task
+
+To send a task, make an HTTP POST to the agent's webhook URL:
+
+- Set header: `Authorization: Bearer <webhook-token>`
+- Set header: `Content-Type: application/json`
+- Body: `{ "prompt": "<task description>", "agentId": "<agent-id>", "sessionKey": "task:<unique-id>" }`
+
+## Receiving Responses
+
+Remote agents will POST their responses back to:
+`http://192.168.1.106:18789/hooks/agent` with `agentId: "coordinator"`
+
+## Broadcasting
+
+To notify all agents, dispatch the same message to each webhook URL sequentially.
 ```
 
 ---
 
-## 6.3 Task Types and Routing
+## 6.5 Task Types and Routing
 
-When the coordinator receives a task, it classifies it and routes it to the right agent(s). Here's the decision tree:
+When the Coordinator receives a task, it classifies it and routes it to the right agent(s). Here's the decision tree:
 
-### 6.3.1 Task Classification
+### 6.5.1 Task Classification
 
 ```
 Incoming Task
@@ -286,96 +275,90 @@ Incoming Task
      │         → monitoring-agent (resource check)
      │
      ├─── "Complex/unclear problem"
-     │         → external-consultant (Claude.ai)
+     │         → External Consultant (Claude.ai via Anthropic provider)
      │         → senior-engineer-1 (review answer)
      │
      └─── "Other"
-              → coordinator handles directly
-              → or asks human for clarification
+              → Coordinator handles directly
+              → or asks human for clarification via Telegram
 ```
 
-### 6.3.2 Multi-Agent Workflows
+### 6.5.2 Multi-Agent Workflows
 
 Some tasks require multiple agents working in sequence:
 
 **Example: "Build a REST API endpoint"**
 
 ```
-Step 1: Coordinator receives task
-Step 2: Senior Eng #1 → designs the endpoint (method, route, schema)
-Step 3: Senior Eng #2 → implements the code based on the design
-Step 4: Quality Agent → reviews the code for correctness
-Step 5: Security Agent → checks for vulnerabilities
-Step 6: DevOps Agent → prepares deployment configuration
-Step 7: Coordinator → compiles results and reports to human
+Step 1: Coordinator receives task via Telegram
+Step 2: Dispatches to senior-engineer-1 → designs the endpoint (method, route, schema)
+Step 3: Dispatches to senior-engineer-2 → implements the code based on the design
+Step 4: Dispatches to quality-agent → reviews the code for correctness
+Step 5: Dispatches to security-agent → checks for vulnerabilities
+Step 6: Dispatches to devops-agent → prepares deployment configuration
+Step 7: Coordinator compiles results and reports to human via Telegram
 ```
+
+Each step is a webhook call from the Coordinator to the appropriate agent, with the response flowing back via webhook callback.
 
 ---
 
-## 6.4 Agent Capability Permissions
+## 6.6 Telegram Channel Binding
 
-Define what each agent is allowed to do through OpenClaw:
+On PC1, bind the Telegram channel to the Coordinator agent so all human messages go to it:
 
 ```powershell
-# Coordinator - full access
-openclaw permissions set coordinator --github read,write --files read,write --network outbound --telegram send,receive
+openclaw agents bind --channel telegram --agent coordinator
+```
 
-# Senior Engineers - code access
-openclaw permissions set senior-engineer-1 --github read,write --files read,write --network none
-openclaw permissions set senior-engineer-2 --github read,write --files read,write --network none
+Verify the binding:
 
-# Quality Agent - read-heavy access
-openclaw permissions set quality-agent --github read,write --files read,write --network none
+```powershell
+openclaw agents list --bindings
+```
 
-# Security Agent - read + audit access
-openclaw permissions set security-agent --github read --files read --network none --audit read
+This ensures that when a human sends a message via Telegram, it's routed to the Coordinator agent — not to any other agent on PC1.
 
-# DevOps Agent - deployment access
-openclaw permissions set devops-agent --github read,write --files read,write --network outbound
+---
 
-# Monitoring Agent - read-only + metrics
-openclaw permissions set monitoring-agent --github read --files read --network none --metrics read,write
+## 6.7 Context Sharing Between Agents
+
+When the Coordinator dispatches a task, it includes context in the webhook prompt. The Coordinator's SOUL.md and dispatch skill instruct it to include:
+
+- Task description and requirements
+- Related files and repositories
+- Architecture notes from previous steps
+- Constraints and deadlines
+- Whether a response is expected
+
+**Example webhook prompt from Coordinator to senior-engineer-2:**
+
+```
+Implement the user authentication endpoint based on the following design from senior-engineer-1:
+
+- Route: POST /api/auth/login
+- Input: { email: string, password: string }
+- Output: { token: string, expiresIn: number }
+- Use JWT tokens with RS256 signing
+- Include rate limiting (5 attempts per minute per IP)
+
+Repository: github.com/team/project
+Branch: feature/auth-endpoint
+Related files: src/auth/routes.py, src/models/user.py
+
+After implementation, respond with:
+1. Files created/modified
+2. Any concerns or questions
+3. Ready for review? (yes/no)
 ```
 
 ---
 
-## 6.5 Context Sharing Between Agents
+## 6.8 Warm-Up Sequence
 
-When the coordinator assigns a task, it needs to pass context to the agent. OpenClaw handles this through **task contexts**:
+After all machines are running, execute this warm-up to verify the team is operational.
 
-```yaml
-# Example task context sent from coordinator to an agent
-task:
-  id: "task-2024-001"
-  type: "implementation"
-  assigned_to: "senior-engineer-2"
-  assigned_by: "coordinator"
-  priority: "high"
-  context:
-    description: "Implement user authentication endpoint"
-    requirements:
-      - "Use JWT tokens"
-      - "Support email/password login"
-      - "Include rate limiting"
-    related_files:
-      - "src/auth/routes.py"
-      - "src/models/user.py"
-    architecture_notes: "See design from senior-engineer-1 in task-2024-000"
-    repository: "github.com/team/project"
-    branch: "feature/auth-endpoint"
-  constraints:
-    deadline: "2024-03-15"
-    review_required: true
-    security_check_required: true
-```
-
----
-
-## 6.6 Warm-Up Sequence
-
-After all machines are running, execute this warm-up sequence to preload critical models:
-
-### Create the warm-up script:
+### Create the warm-up script
 
 **File**: `C:\AI-Team\scripts\warmup.ps1`
 
@@ -384,33 +367,65 @@ After all machines are running, execute this warm-up sequence to preload critica
 Write-Host "=== AI Team Warm-Up Sequence ===" -ForegroundColor Cyan
 Write-Host ""
 
-# Step 1: Verify cluster is healthy
-Write-Host "[1/4] Checking cluster health..." -ForegroundColor Yellow
-openclaw cluster status
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "ERROR: Cluster is not healthy. Fix issues before continuing." -ForegroundColor Red
+# Step 1: Verify all Gateways are healthy
+Write-Host "[1/4] Checking Gateway health on all machines..." -ForegroundColor Yellow
+
+$machines = @(
+    @{ Name = "PC1"; IP = "192.168.1.106" },
+    @{ Name = "PC2"; IP = "192.168.1.112" },
+    @{ Name = "Laptop"; IP = "192.168.1.113" }
+)
+
+$allHealthy = $true
+foreach ($machine in $machines) {
+    try {
+        openclaw gateway probe --url "http://$($machine.IP):18789" 2>&1 | Out-Null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "  $($machine.Name) ($($machine.IP)): HEALTHY" -ForegroundColor Green
+        } else {
+            Write-Host "  $($machine.Name) ($($machine.IP)): UNHEALTHY" -ForegroundColor Red
+            $allHealthy = $false
+        }
+    } catch {
+        Write-Host "  $($machine.Name) ($($machine.IP)): UNREACHABLE" -ForegroundColor Red
+        $allHealthy = $false
+    }
+}
+
+if (-not $allHealthy) {
+    Write-Host "ERROR: Not all Gateways are healthy. Fix issues before continuing." -ForegroundColor Red
     exit 1
 }
 
-# Step 2: Warm up coordinator (always loaded)
-Write-Host "[2/4] Warming up Coordinator..." -ForegroundColor Yellow
-openclaw message send --to coordinator --content "System startup. Run self-check and confirm ready status." --wait
-Write-Host "Coordinator: READY" -ForegroundColor Green
+# Step 2: Check local agents on PC1
+Write-Host "[2/4] Checking PC1 agents..." -ForegroundColor Yellow
+openclaw agents list
 
-# Step 3: Warm up monitoring agent (always loaded)
-Write-Host "[3/4] Warming up Monitoring Agent..." -ForegroundColor Yellow
-openclaw message send --to monitoring-agent --content "System startup. Begin monitoring all nodes." --wait
-Write-Host "Monitoring Agent: READY" -ForegroundColor Green
+# Step 3: Check model availability
+Write-Host "[3/4] Checking model availability..." -ForegroundColor Yellow
+openclaw models status
 
-# Step 4: Quick check on other agents (don't load them, just verify they're available)
-Write-Host "[4/4] Verifying agent availability..." -ForegroundColor Yellow
-$agents = @("senior-engineer-1", "senior-engineer-2", "quality-agent", "security-agent", "devops-agent")
-foreach ($agent in $agents) {
-    $status = openclaw model status $agent 2>&1
-    if ($status -match "READY") {
-        Write-Host "  $agent : AVAILABLE" -ForegroundColor Green
-    } else {
-        Write-Host "  $agent : NOT AVAILABLE" -ForegroundColor Red
+# Step 4: Test webhook connectivity to remote machines
+Write-Host "[4/4] Testing webhook connectivity..." -ForegroundColor Yellow
+$token = $env:OPENCLAW_GATEWAY_TOKEN
+$webhookToken = "YOUR_WEBHOOK_SECRET_HERE"  # Replace with your actual webhook token
+
+$remoteAgents = @(
+    @{ Agent = "quality-agent"; URL = "http://192.168.1.112:18789/hooks/wake" },
+    @{ Agent = "security-agent"; URL = "http://192.168.1.112:18789/hooks/wake" },
+    @{ Agent = "devops-agent"; URL = "http://192.168.1.113:18789/hooks/wake" },
+    @{ Agent = "monitoring-agent"; URL = "http://192.168.1.113:18789/hooks/wake" }
+)
+
+foreach ($remote in $remoteAgents) {
+    try {
+        $response = Invoke-RestMethod -Uri $remote.URL `
+          -Method POST `
+          -Headers @{ "Authorization" = "Bearer $webhookToken" } `
+          -ErrorAction Stop
+        Write-Host "  $($remote.Agent): REACHABLE" -ForegroundColor Green
+    } catch {
+        Write-Host "  $($remote.Agent): UNREACHABLE" -ForegroundColor Red
     }
 }
 
@@ -419,7 +434,7 @@ Write-Host "=== Warm-Up Complete ===" -ForegroundColor Cyan
 Write-Host "Send tasks via Telegram to begin working."
 ```
 
-### Run it:
+### Run it
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File C:\AI-Team\scripts\warmup.ps1
@@ -427,15 +442,16 @@ powershell -ExecutionPolicy Bypass -File C:\AI-Team\scripts\warmup.ps1
 
 ---
 
-## 6.7 Checklist
+## 6.9 Checklist
 
-- [ ] Team configuration file (`team.yaml`) created and loaded
-- [ ] Communication rules configured (coordinator-first routing)
-- [ ] Permissions set for all agents
+- [ ] Agents created on all machines (`openclaw agents list` on each)
+- [ ] SOUL.md files created in each agent's workspace
+- [ ] Coordinator dispatch skill created with correct webhook URLs
+- [ ] Telegram channel bound to Coordinator agent on PC1
 - [ ] Warm-up script created and tested
-- [ ] All agents respond to ready-check messages
-- [ ] Coordinator correctly routes test tasks to appropriate agents
-- [ ] Escalation rules configured for human notification
+- [ ] All Gateways reachable via probe
+- [ ] Webhook wake test succeeds for all remote agents
+- [ ] Coordinator correctly classifies and routes test tasks
 
 ---
 

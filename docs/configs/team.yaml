@@ -1,43 +1,74 @@
 # =============================================================================
-# AI Development Team - Team Configuration
-# Defines team structure, roles, capabilities, and communication rules
-# Load with: openclaw team load --config team.yaml
+# AI Development Team - Team Reference Configuration
+# This is a REFERENCE FILE documenting team structure, roles, and routing.
+# OpenClaw does NOT load this file directly. Instead, this information is
+# implemented as:
+#   - Agent definitions in each machine's ~/.openclaw/openclaw.json
+#   - SOUL.md files in each agent's workspace
+#   - Dispatch skills in the Coordinator's workspace
+#   - Webhook URLs between Gateways
+# See Chapter 06 for implementation details.
 # =============================================================================
 
 team:
   name: "AI Development Team"
-  version: "1.0"
+  version: "2.0"
+
+# ---- Machine & Gateway Layout ----
+machines:
+  pc1:
+    ip: "192.168.1.106"
+    gateway_port: 18789
+    webhook_url: "http://192.168.1.106:18789/hooks/agent"
+    hardware: "RTX 4090 24GB | 64GB RAM | 32 cores"
+    agents:
+      - coordinator
+      - senior-engineer-1
+      - senior-engineer-2
+
+  pc2:
+    ip: "192.168.1.112"
+    gateway_port: 18789
+    webhook_url: "http://192.168.1.112:18789/hooks/agent"
+    hardware: "RTX 2080 Ti 11GB | 64GB RAM | 24 cores"
+    agents:
+      - quality-agent
+      - security-agent
+
+  laptop:
+    ip: "192.168.1.113"
+    gateway_port: 18789
+    webhook_url: "http://192.168.1.113:18789/hooks/agent"
+    hardware: "Quadro T2000 4GB | 64GB RAM | 12 cores"
+    agents:
+      - devops-agent
+      - monitoring-agent
 
 # ---- Role Definitions ----
+# Each role maps to an OpenClaw agent with its own workspace and SOUL.md
 roles:
   coordinator:
-    model: "coordinator"
-    node: "pc1-coordinator"
+    machine: "pc1"
     description: "Central command and human interface"
+    telegram_bound: true        # Telegram channel routed to this agent
     capabilities:
       - task_decomposition
       - task_assignment
       - conflict_resolution
       - human_communication
       - external_consultation
-    always_loaded: true
-    telegram_access: true
 
   senior-engineer-1:
-    model: "senior-engineer-1"
-    node: "pc1-coordinator"
+    machine: "pc1"
     description: "Architecture and complex problem solving"
     capabilities:
       - architecture_design
       - code_review
       - technical_specification
       - system_design
-    fallback_node: "pc2-worker"
-    fallback_model: "backup-engineer"
 
   senior-engineer-2:
-    model: "senior-engineer-2"
-    node: "pc1-coordinator"
+    machine: "pc1"
     description: "Implementation and optimization"
     capabilities:
       - code_implementation
@@ -45,12 +76,9 @@ roles:
       - refactoring
       - debugging
       - unit_testing
-    fallback_node: "pc2-worker"
-    fallback_model: "backup-engineer"
 
   quality-agent:
-    model: "quality-agent"
-    node: "pc2-worker"
+    machine: "pc2"
     description: "Code review, testing, documentation"
     capabilities:
       - code_review
@@ -60,8 +88,7 @@ roles:
       - best_practices
 
   security-agent:
-    model: "security-agent"
-    node: "pc2-worker"
+    machine: "pc2"
     description: "Security analysis and best practices"
     capabilities:
       - vulnerability_scanning
@@ -71,8 +98,7 @@ roles:
       - threat_modeling
 
   devops-agent:
-    model: "devops-agent"
-    node: "laptop-monitor"
+    machine: "laptop"
     description: "Deployment and infrastructure"
     capabilities:
       - deployment
@@ -80,132 +106,89 @@ roles:
       - infrastructure
       - git_workflow
       - containerization
-    fallback_node: "pc2-worker"
 
   monitoring-agent:
-    model: "monitoring-agent"
-    node: "laptop-monitor"
+    machine: "laptop"
     description: "Resource tracking and performance analysis"
     capabilities:
       - resource_monitoring
       - performance_analysis
       - alerting
       - health_reporting
-    always_loaded: true
 
   external-consultant:
     type: "external"
-    provider: "claude"
+    provider: "anthropic"       # Configured in PC1's models.providers.anthropic
     description: "Complex problems requiring advanced reasoning"
     capabilities:
       - complex_reasoning
       - code_generation
       - architecture_review
       - second_opinion
-    rate_limited: true
-    max_requests_per_hour: 20
 
-# ---- Communication Rules ----
-communication:
-  audit_logging: true
-  log_path: "C:\\AI-Team\\logs\\communication.log"
-  format:
-    include_sender: true
-    include_timestamp: true
-    include_task_id: true
+# ---- Task Routing Rules ----
+# Implemented in Coordinator's SOUL.md and dispatch skill
+task_routing:
+  architecture:
+    primary: "senior-engineer-1"
+    reviewer: "quality-agent"
+  implementation:
+    primary: "senior-engineer-2"
+    reviewer: "quality-agent"
+    security_check: "security-agent"
+  bug_fix:
+    primary: "senior-engineer-2"
+    reviewer: "quality-agent"
+  security_audit:
+    primary: "security-agent"
+    reviewer: "senior-engineer-1"
+  deployment:
+    primary: "devops-agent"
+    reviewer: "security-agent"
+  documentation:
+    primary: "quality-agent"
+  performance:
+    primary: "monitoring-agent"
+    consultant: "senior-engineer-1"
+  complex_problem:
+    primary: "external-consultant"
+    reviewer: "senior-engineer-1"
 
-  escalation:
-    conditions:
-      - type: "conflict_unresolved"
-        timeout_minutes: 10
-      - type: "task_stalled"
-        timeout_minutes: 30
-      - type: "security_violation"
-        immediate: true
-      - type: "resource_critical"
-        immediate: true
-      - type: "restricted_action_requested"
-        immediate: true
-
-# ---- Task Assignment Rules ----
-task_assignment:
-  routing:
-    architecture:
-      primary: "senior-engineer-1"
-      reviewer: "quality-agent"
-    implementation:
-      primary: "senior-engineer-2"
-      reviewer: "quality-agent"
-      security_check: "security-agent"
-    bug_fix:
-      primary: "senior-engineer-2"
-      reviewer: "quality-agent"
-    security_audit:
-      primary: "security-agent"
-      reviewer: "senior-engineer-1"
-    deployment:
-      primary: "devops-agent"
-      reviewer: "security-agent"
-    documentation:
-      primary: "quality-agent"
-    performance:
-      primary: "monitoring-agent"
-      consultant: "senior-engineer-1"
-    complex_problem:
-      primary: "external-consultant"
-      reviewer: "senior-engineer-1"
-
-# ---- Task Tracking ----
-task_tracking:
-  notify_on_subtask_complete: true
-  notify_on_review_complete: true
-  notify_on_error: true
-  notify_interval_minutes: 10
-  notify_on_completion: true
-  max_revision_cycles: 3
+# ---- Escalation Rules ----
+# Implemented in Coordinator's SOUL.md
+escalation:
+  conditions:
+    - type: "conflict_unresolved"
+      timeout_minutes: 10
+    - type: "task_stalled"
+      timeout_minutes: 30
+    - type: "security_violation"
+      immediate: true
+    - type: "resource_critical"
+      immediate: true
+    - type: "restricted_action_requested"
+      immediate: true
 
 # ---- Degradation Rules ----
+# Implemented in Coordinator's SOUL.md
 degradation:
   pc2_offline:
-    reassign:
-      quality-agent: "coordinator"
-      security-agent: "coordinator"
+    reassign_to_coordinator: ["quality-agent", "security-agent"]
     notify_human: true
     message: "PC2 offline - reduced review capability"
-
   laptop_offline:
-    reassign:
-      devops-agent: "coordinator"
-      monitoring-agent: null
+    reassign_to_coordinator: ["devops-agent"]
+    pause: ["monitoring-agent"]
     notify_human: true
     message: "Laptop offline - monitoring paused"
-
   pc1_offline:
-    action: "activate_backup_coordinator"
-    backup_node: "pc2-worker"
-    backup_model: "backup-coordinator"
+    action: "human_intervention_required"
     notify_human: true
-    message: "CRITICAL - PC1 offline. Backup coordinator activated on PC2."
+    message: "CRITICAL - PC1 offline. Coordinator unavailable."
 
-# ---- Failover ----
-failover:
-  coordinator:
-    health_check_interval_seconds: 15
-    failure_threshold: 3
-    backup_node: "pc2-worker"
-    backup_model: "backup-coordinator"
-    restore_on_recovery: true
-
-# ---- Monitoring ----
+# ---- Monitoring Thresholds ----
+# Implemented in monitoring-agent's SOUL.md and monitoring scripts
 monitoring:
-  check_interval_seconds: 30
-  targets:
-    - node: "pc1-coordinator"
-      checks: ["gpu", "cpu", "ram", "disk", "ollama", "openclaw"]
-    - node: "pc2-worker"
-      checks: ["gpu", "cpu", "ram", "disk", "ollama", "openclaw"]
-    - node: "laptop-monitor"
-      checks: ["gpu", "cpu", "ram", "disk", "ollama"]
   thresholds:
     gpu_temp_warning: 80
     gpu_temp_critical: 90
@@ -217,6 +200,3 @@ monitoring:
     disk_critical_gb: 5
     model_response_warning_seconds: 60
     model_response_critical_seconds: 120
-  reporting:
-    summary_interval_minutes: 60
-    alert_cooldown_minutes: 5

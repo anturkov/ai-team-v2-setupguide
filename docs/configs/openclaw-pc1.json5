@@ -1,0 +1,121 @@
+// =============================================================================
+// OpenClaw Configuration - PC1 (Primary Coordinator)
+// Machine: 192.168.1.106 | RTX 4090 24GB | 64GB RAM | 32 cores
+// Role: Coordinator - central hub for task distribution and human interface
+// File: ~/.openclaw/openclaw.json
+// =============================================================================
+{
+  // Gateway configuration
+  gateway: {
+    port: 18789,
+    bind: "lan",           // "lan" exposes to local network (required for cross-machine)
+    mode: "local",
+    auth: "token"          // Use token auth; set OPENCLAW_GATEWAY_TOKEN env var
+  },
+
+  // Agent definitions
+  agents: {
+    defaults: {
+      workspace: "~/.openclaw/workspace",
+      model: {
+        primary: "ollama/coordinator-model",   // Set to your actual model in Chapter 05
+        fallbacks: []
+      },
+      timeoutSeconds: 600,
+      maxConcurrent: 2
+    },
+    list: [
+      {
+        id: "coordinator",
+        default: true,
+        workspace: "~/.openclaw/workspace-coordinator"
+        // Coordinator agent: receives Telegram messages, delegates to team
+      },
+      {
+        id: "senior-engineer-1",
+        workspace: "~/.openclaw/workspace-senior-eng-1"
+        // Architecture and complex problem solving
+      },
+      {
+        id: "senior-engineer-2",
+        workspace: "~/.openclaw/workspace-senior-eng-2"
+        // Implementation and optimization
+      }
+    ]
+  },
+
+  // Bindings: route Telegram messages to the Coordinator agent
+  bindings: [
+    {
+      channel: "telegram",
+      agentId: "coordinator"
+    }
+  ],
+
+  // Telegram channel (human interface)
+  channels: {
+    telegram: {
+      botToken: "YOUR_TELEGRAM_BOT_TOKEN",   // From BotFather (see Chapter 07)
+      enabled: true,
+      dmPolicy: "allowlist",                 // Only approved users get access
+      historyLimit: 50,
+      mediaMaxMb: 100,
+      streaming: "off"
+    }
+  },
+
+  // Model providers
+  models: {
+    mode: "merge",
+    providers: {
+      ollama: {
+        baseUrl: "http://127.0.0.1:11434",   // NO /v1 suffix!
+        apiKey: "ollama-local",
+        api: "ollama"                         // Native API for reliable tool calling
+      },
+      // Claude.ai External Consultant (see Chapter 05 for model details)
+      anthropic: {
+        apiKey: "YOUR_CLAUDE_API_KEY_HERE",   // Or use env: ANTHROPIC_API_KEY
+        models: [
+          {
+            id: "claude-sonnet-4-20250514",
+            contextWindow: 200000,
+            maxTokens: 8192
+          }
+        ]
+      }
+    }
+  },
+
+  // Webhook configuration (for receiving messages from PC2 and Laptop)
+  hooks: {
+    enabled: true,
+    token: "YOUR_WEBHOOK_SECRET_HERE",        // Shared across all machines
+    path: "/hooks",
+    allowedAgentIds: ["coordinator", "senior-engineer-1", "senior-engineer-2"],
+    allowRequestSessionKey: true,
+    allowedSessionKeyPrefixes: ["hook:", "task:"]
+  },
+
+  // Session configuration
+  session: {
+    isolation: "agent"     // Each agent maintains separate sessions
+  },
+
+  // Cron jobs (optional scheduled tasks)
+  cron: {
+    enabled: true,
+    maxConcurrentRuns: 2
+  },
+
+  // Identity (shown in Telegram and dashboard)
+  identity: {
+    name: "AI Team Coordinator",
+    emoji: "🤖"
+  },
+
+  // Logging
+  logging: {
+    level: "info"
+  }
+}

@@ -1,0 +1,82 @@
+// =============================================================================
+// OpenClaw Configuration - PC2 (Secondary Worker)
+// Machine: 192.168.1.112 | RTX 2080 Ti 11GB | 64GB RAM | 24 cores
+// Role: Specialized agents (Quality, Security, overflow)
+// File: ~/.openclaw/openclaw.json
+// =============================================================================
+{
+  // Gateway configuration
+  gateway: {
+    port: 18789,
+    bind: "lan",           // "lan" exposes to local network
+    mode: "local",
+    auth: "token"          // Same OPENCLAW_GATEWAY_TOKEN as PC1
+  },
+
+  // Agent definitions
+  agents: {
+    defaults: {
+      workspace: "~/.openclaw/workspace",
+      model: {
+        primary: "ollama/quality-model",     // Set to your actual model in Chapter 05
+        fallbacks: []
+      },
+      timeoutSeconds: 600,
+      maxConcurrent: 2
+    },
+    list: [
+      {
+        id: "quality-agent",
+        default: true,
+        workspace: "~/.openclaw/workspace-quality"
+        // Code review, testing, documentation
+      },
+      {
+        id: "security-agent",
+        workspace: "~/.openclaw/workspace-security"
+        // Security analysis and best practices
+      }
+    ]
+  },
+
+  // No Telegram channel on PC2 - agents receive work via webhooks from PC1
+  channels: {},
+
+  // Model providers
+  models: {
+    mode: "merge",
+    providers: {
+      ollama: {
+        baseUrl: "http://127.0.0.1:11434",   // NO /v1 suffix!
+        apiKey: "ollama-local",
+        api: "ollama"
+      }
+    }
+  },
+
+  // Webhook configuration (receives task assignments from PC1 Coordinator)
+  hooks: {
+    enabled: true,
+    token: "YOUR_WEBHOOK_SECRET_HERE",        // Same secret as PC1
+    path: "/hooks",
+    allowedAgentIds: ["quality-agent", "security-agent"],
+    allowRequestSessionKey: true,
+    allowedSessionKeyPrefixes: ["hook:", "task:"]
+  },
+
+  // Session configuration
+  session: {
+    isolation: "agent"
+  },
+
+  // Identity
+  identity: {
+    name: "PC2 Worker Node",
+    emoji: "🔧"
+  },
+
+  // Logging
+  logging: {
+    level: "info"
+  }
+}

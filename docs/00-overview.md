@@ -37,9 +37,9 @@ By the end of this guide, you will have:
 │  │  (Architecture)     │    │  (Implementation)           │         │
 │  └─────────────────────┘    └────────────────────────────-┘         │
 │                                                                     │
-│  OpenClaw Node (Full Admin)                                         │
+│  OpenClaw Gateway (:18789) - Full Admin                              │
 └──────────┬──────────────────────────────┬───────────────────────────┘
-           │ TCP/IP via OpenClaw          │
+           │ Webhooks via OpenClaw        │
            ▼                              ▼
 ┌────────────────────────────┐  ┌──────────────────────────────────┐
 │  PC2 (192.168.1.112)       │  │  Laptop (192.168.1.113)          │
@@ -54,12 +54,12 @@ By the end of this guide, you will have:
 │  │  (Security Analysis) │  │  │  │  (Resource Tracking)       │  │
 │  ├──────────────────────┤  │  │  └────────────────────────────┘  │
 │  │  Senior Eng #1 or #2 │  │  │                                  │
-│  │  (Overflow/Backup)   │  │  │  OpenClaw Node (Full Admin)      │
+│  │  (Overflow/Backup)   │  │  │  OpenClaw Gateway (:18789)      │
 │  └──────────────────────┘  │  └──────────────────────────────────┘
 │                            │
-│  OpenClaw Node (Full Admin)│       ┌─────────────────────────┐
+│  OpenClaw Gateway (:18789)│       ┌─────────────────────────┐
 └────────────────────────────┘       │  External: Claude.ai    │
-                                     │  (via OpenClaw token)   │
+                                     │  (via Anthropic API)    │
                                      │  Role: Consultant       │
                                      └─────────────────────────┘
 ```
@@ -68,7 +68,7 @@ By the end of this guide, you will have:
 
 1. **No Monolithic Controller** - There is no single Python script routing everything. Each AI model is an independent agent.
 2. **OpenClaw is the Infrastructure** - All inter-model communication, file management, GitHub operations, and Telegram integration go through OpenClaw natively.
-3. **Peer-to-Peer via OpenClaw** - Models communicate directly with each other through OpenClaw's discovery and messaging system.
+3. **Peer-to-Peer via OpenClaw** - Models communicate directly with each other through OpenClaw's webhook system between independent Gateways.
 4. **Human Oversight** - The Telegram bot ensures a human is always in the loop for critical decisions.
 5. **Fault Tolerant** - If one model goes down, the system degrades gracefully and the coordinator reassigns work.
 
