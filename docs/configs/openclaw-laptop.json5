@@ -1,0 +1,82 @@
+// =============================================================================
+// OpenClaw Configuration - Laptop (Monitor & Light Duties)
+// Machine: 192.168.1.113 | Quadro T2000 4GB | 64GB RAM | 12 cores
+// Role: Monitoring agent and DevOps tasks
+// File: ~/.openclaw/openclaw.json
+// =============================================================================
+{
+  // Gateway configuration
+  gateway: {
+    port: 18789,
+    bind: "lan",           // "lan" exposes to local network
+    mode: "local",
+    auth: "token"          // Same OPENCLAW_GATEWAY_TOKEN as PC1
+  },
+
+  // Agent definitions
+  agents: {
+    defaults: {
+      workspace: "~/.openclaw/workspace",
+      model: {
+        primary: "ollama/monitoring-model",   // Set to your actual model in Chapter 05
+        fallbacks: []
+      },
+      timeoutSeconds: 600,
+      maxConcurrent: 1       // Laptop has limited resources
+    },
+    list: [
+      {
+        id: "devops-agent",
+        default: true,
+        workspace: "~/.openclaw/workspace-devops"
+        // Deployment and infrastructure management
+      },
+      {
+        id: "monitoring-agent",
+        workspace: "~/.openclaw/workspace-monitoring"
+        // Resource tracking and performance analysis
+      }
+    ]
+  },
+
+  // No Telegram channel on Laptop - agents receive work via webhooks from PC1
+  channels: {},
+
+  // Model providers
+  models: {
+    mode: "merge",
+    providers: {
+      ollama: {
+        baseUrl: "http://127.0.0.1:11434",   // NO /v1 suffix!
+        apiKey: "ollama-local",
+        api: "ollama"
+      }
+    }
+  },
+
+  // Webhook configuration (receives task assignments from PC1 Coordinator)
+  hooks: {
+    enabled: true,
+    token: "YOUR_WEBHOOK_SECRET_HERE",        // Same secret as PC1
+    path: "/hooks",
+    allowedAgentIds: ["devops-agent", "monitoring-agent"],
+    allowRequestSessionKey: true,
+    allowedSessionKeyPrefixes: ["hook:", "task:"]
+  },
+
+  // Session configuration
+  session: {
+    isolation: "agent"
+  },
+
+  // Identity
+  identity: {
+    name: "Laptop Monitor",
+    emoji: "📊"
+  },
+
+  // Logging
+  logging: {
+    level: "info"
+  }
+}
