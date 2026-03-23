@@ -1,0 +1,69 @@
+# =============================================================================
+# Telegram Bot Configuration
+# Used by: PC1 (Coordinator)
+# Load with: openclaw telegram load --config telegram-bot-config.yaml
+# =============================================================================
+
+telegram:
+  enabled: true
+
+  # Bot credentials (from BotFather)
+  bot_token: "YOUR_BOT_TOKEN_HERE"
+
+  # Security - only these Chat IDs can interact with the bot
+  authorized_users:
+    - YOUR_CHAT_ID_HERE       # Replace with your numeric Chat ID
+    # - SECOND_USER_ID        # Add more users as needed
+  unauthorized_response: "You are not authorized to use this bot."
+
+  # Message routing
+  target_model: "coordinator"
+
+  # Message formatting
+  rich_format: true
+  max_message_length: 4096
+  code_block_language: "auto"
+
+  # Notifications
+  notify_on_escalation: true
+  notify_on_error: true
+  notify_on_completion: true
+
+  # Rate limiting
+  max_messages_per_minute: 30
+
+  # Bot commands
+  commands:
+    status:
+      description: "Check team status and active tasks"
+      handler: "coordinator"
+      prompt: "Provide a brief status update on all active tasks and team member availability."
+
+    assign:
+      description: "Assign a task to the team"
+      handler: "coordinator"
+      prompt: "The human operator wants to assign a new task. Analyze the following request and assign it to the appropriate team member(s)."
+
+    review:
+      description: "Request a code review"
+      handler: "coordinator"
+      prompt: "The human operator requests a code review. Route this to the Quality Agent and Security Agent."
+
+    deploy:
+      description: "Trigger a deployment"
+      handler: "coordinator"
+      prompt: "The human operator requests a deployment. Route this to the DevOps Agent with appropriate safety checks."
+
+    health:
+      description: "Check system health"
+      handler: "monitoring-agent"
+      prompt: "Provide a full health report: GPU temp/VRAM, RAM, disk, model status, and network connectivity for all machines."
+
+    cancel:
+      description: "Cancel current task"
+      handler: "coordinator"
+      prompt: "The human operator wants to cancel the current task. Notify all involved agents and clean up."
+
+    help:
+      description: "Show available commands"
+      handler: "builtin"

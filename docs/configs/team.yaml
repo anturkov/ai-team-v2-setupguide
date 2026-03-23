@@ -1,0 +1,222 @@
+# =============================================================================
+# AI Development Team - Team Configuration
+# Defines team structure, roles, capabilities, and communication rules
+# Load with: openclaw team load --config team.yaml
+# =============================================================================
+
+team:
+  name: "AI Development Team"
+  version: "1.0"
+
+# ---- Role Definitions ----
+roles:
+  coordinator:
+    model: "coordinator"
+    node: "pc1-coordinator"
+    description: "Central command and human interface"
+    capabilities:
+      - task_decomposition
+      - task_assignment
+      - conflict_resolution
+      - human_communication
+      - external_consultation
+    always_loaded: true
+    telegram_access: true
+
+  senior-engineer-1:
+    model: "senior-engineer-1"
+    node: "pc1-coordinator"
+    description: "Architecture and complex problem solving"
+    capabilities:
+      - architecture_design
+      - code_review
+      - technical_specification
+      - system_design
+    fallback_node: "pc2-worker"
+    fallback_model: "backup-engineer"
+
+  senior-engineer-2:
+    model: "senior-engineer-2"
+    node: "pc1-coordinator"
+    description: "Implementation and optimization"
+    capabilities:
+      - code_implementation
+      - optimization
+      - refactoring
+      - debugging
+      - unit_testing
+    fallback_node: "pc2-worker"
+    fallback_model: "backup-engineer"
+
+  quality-agent:
+    model: "quality-agent"
+    node: "pc2-worker"
+    description: "Code review, testing, documentation"
+    capabilities:
+      - code_review
+      - test_creation
+      - documentation
+      - style_checking
+      - best_practices
+
+  security-agent:
+    model: "security-agent"
+    node: "pc2-worker"
+    description: "Security analysis and best practices"
+    capabilities:
+      - vulnerability_scanning
+      - security_review
+      - dependency_audit
+      - compliance_checking
+      - threat_modeling
+
+  devops-agent:
+    model: "devops-agent"
+    node: "laptop-monitor"
+    description: "Deployment and infrastructure"
+    capabilities:
+      - deployment
+      - ci_cd
+      - infrastructure
+      - git_workflow
+      - containerization
+    fallback_node: "pc2-worker"
+
+  monitoring-agent:
+    model: "monitoring-agent"
+    node: "laptop-monitor"
+    description: "Resource tracking and performance analysis"
+    capabilities:
+      - resource_monitoring
+      - performance_analysis
+      - alerting
+      - health_reporting
+    always_loaded: true
+
+  external-consultant:
+    type: "external"
+    provider: "claude"
+    description: "Complex problems requiring advanced reasoning"
+    capabilities:
+      - complex_reasoning
+      - code_generation
+      - architecture_review
+      - second_opinion
+    rate_limited: true
+    max_requests_per_hour: 20
+
+# ---- Communication Rules ----
+communication:
+  audit_logging: true
+  log_path: "C:\\AI-Team\\logs\\communication.log"
+  format:
+    include_sender: true
+    include_timestamp: true
+    include_task_id: true
+
+  escalation:
+    conditions:
+      - type: "conflict_unresolved"
+        timeout_minutes: 10
+      - type: "task_stalled"
+        timeout_minutes: 30
+      - type: "security_violation"
+        immediate: true
+      - type: "resource_critical"
+        immediate: true
+      - type: "restricted_action_requested"
+        immediate: true
+
+# ---- Task Assignment Rules ----
+task_assignment:
+  routing:
+    architecture:
+      primary: "senior-engineer-1"
+      reviewer: "quality-agent"
+    implementation:
+      primary: "senior-engineer-2"
+      reviewer: "quality-agent"
+      security_check: "security-agent"
+    bug_fix:
+      primary: "senior-engineer-2"
+      reviewer: "quality-agent"
+    security_audit:
+      primary: "security-agent"
+      reviewer: "senior-engineer-1"
+    deployment:
+      primary: "devops-agent"
+      reviewer: "security-agent"
+    documentation:
+      primary: "quality-agent"
+    performance:
+      primary: "monitoring-agent"
+      consultant: "senior-engineer-1"
+    complex_problem:
+      primary: "external-consultant"
+      reviewer: "senior-engineer-1"
+
+# ---- Task Tracking ----
+task_tracking:
+  notify_on_subtask_complete: true
+  notify_on_review_complete: true
+  notify_on_error: true
+  notify_interval_minutes: 10
+  notify_on_completion: true
+  max_revision_cycles: 3
+
+# ---- Degradation Rules ----
+degradation:
+  pc2_offline:
+    reassign:
+      quality-agent: "coordinator"
+      security-agent: "coordinator"
+    notify_human: true
+    message: "PC2 offline - reduced review capability"
+
+  laptop_offline:
+    reassign:
+      devops-agent: "coordinator"
+      monitoring-agent: null
+    notify_human: true
+    message: "Laptop offline - monitoring paused"
+
+  pc1_offline:
+    action: "activate_backup_coordinator"
+    backup_node: "pc2-worker"
+    backup_model: "backup-coordinator"
+    notify_human: true
+    message: "CRITICAL - PC1 offline. Backup coordinator activated on PC2."
+
+# ---- Failover ----
+failover:
+  coordinator:
+    health_check_interval_seconds: 15
+    failure_threshold: 3
+    backup_node: "pc2-worker"
+    backup_model: "backup-coordinator"
+    restore_on_recovery: true
+
+# ---- Monitoring ----
+monitoring:
+  check_interval_seconds: 30
+  targets:
+    - node: "pc1-coordinator"
+      checks: ["gpu", "cpu", "ram", "disk", "ollama", "openclaw"]
+    - node: "pc2-worker"
+      checks: ["gpu", "cpu", "ram", "disk", "ollama", "openclaw"]
+    - node: "laptop-monitor"
+      checks: ["gpu", "cpu", "ram", "disk", "ollama"]
+  thresholds:
+    gpu_temp_warning: 80
+    gpu_temp_critical: 90
+    vram_warning_percent: 90
+    vram_critical_percent: 95
+    ram_warning_percent: 85
+    ram_critical_percent: 90
+    disk_warning_gb: 10
+    disk_critical_gb: 5
+    model_response_warning_seconds: 60
+    model_response_critical_seconds: 120
+  reporting:
+    summary_interval_minutes: 60
+    alert_cooldown_minutes: 5

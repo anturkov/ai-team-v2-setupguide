@@ -1,0 +1,129 @@
+# =============================================================================
+# OpenClaw Configuration - PC1 (Primary Coordinator)
+# Machine: 192.168.1.106 | RTX 4090 24GB | 64GB RAM | 32 cores
+# Role: Coordinator - central hub for task distribution and human interface
+# =============================================================================
+
+node:
+  name: "pc1-coordinator"
+  role: "coordinator"
+  host: "192.168.1.106"
+  port: 8080
+  description: "Primary coordinator with RTX 4090"
+
+# Cluster configuration
+cluster:
+  discovery:
+    mode: "static"
+    nodes:
+      - name: "pc1-coordinator"
+        host: "192.168.1.106"
+        port: 8080
+        role: "coordinator"
+      - name: "pc2-worker"
+        host: "192.168.1.112"
+        port: 8080
+        role: "worker"
+      - name: "laptop-monitor"
+        host: "192.168.1.113"
+        port: 8080
+        role: "worker"
+  health_check:
+    interval_seconds: 15
+    timeout_seconds: 5
+    failure_threshold: 3
+  secret: "CHANGE_ME_TO_A_SECURE_RANDOM_STRING"
+
+# Ollama integration
+ollama:
+  host: "127.0.0.1"
+  port: 11434
+  timeout_seconds: 300
+  max_concurrent_requests: 2
+
+# Telegram integration
+telegram:
+  enabled: true
+  bot_token: "YOUR_TELEGRAM_BOT_TOKEN_HERE"
+  authorized_users:
+    - YOUR_CHAT_ID_HERE
+  target_model: "coordinator"
+  rich_format: true
+  max_message_length: 4096
+  notify_on_escalation: true
+  notify_on_error: true
+  notify_on_completion: true
+  max_messages_per_minute: 30
+
+# GitHub integration
+github:
+  enabled: true
+  username: "YOUR_GITHUB_USERNAME"
+  token: "YOUR_GITHUB_PAT_HERE"
+  workspace: "C:\\AI-Team\\repos"
+  default_branch: "main"
+  commit_prefix: "[AI-Team]"
+
+# Claude.ai External Consultant
+claude:
+  enabled: true
+  api_key: "YOUR_CLAUDE_API_KEY_HERE"
+  model: "claude-sonnet-4-20250514"
+  max_tokens: 4096
+  max_requests_per_hour: 20
+
+# Message routing
+routing:
+  mode: "coordinator-first"
+  allow_peer: true
+  external_via_coordinator: true
+  timeout_seconds: 300
+
+# Message queue
+queue:
+  max_size: 100
+  max_retries: 3
+  retry_backoff: "5,15,60"
+  message_ttl_minutes: 30
+
+# File access
+files:
+  allowed_paths:
+    - "C:\\AI-Team\\repos"
+    - "C:\\AI-Team\\temp"
+    - "C:\\AI-Team\\logs"
+  denied_paths:
+    - "C:\\Windows"
+    - "C:\\Program Files"
+    - "C:\\Users\\*\\AppData"
+  max_file_size_mb: 100
+
+# Error handling
+error_handling:
+  retry:
+    max_attempts: 3
+    backoff_strategy: "exponential"
+    initial_delay_seconds: 5
+    max_delay_seconds: 60
+
+# Logging
+logging:
+  level: "info"
+  file: "C:\\AI-Team\\openclaw\\logs\\openclaw.log"
+  max_size_mb: 100
+  max_files: 5
+  audit:
+    enabled: true
+    path: "C:\\AI-Team\\logs"
+    include_message_content: true
+    retention_days: 30
+
+# Performance
+performance:
+  cache:
+    enabled: true
+    ttl_seconds: 300
+    max_entries: 100
+  message_compression:
+    enabled: true
+    threshold_kb: 100
