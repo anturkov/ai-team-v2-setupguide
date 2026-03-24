@@ -1,0 +1,630 @@
+{
+  "meta": {
+    "lastTouchedVersion": "2026.3.23-2",
+    "lastTouchedAt": "2026-03-24T21:22:03.029Z"
+  },
+  "wizard": {
+    "lastRunAt": "2026-03-24T20:52:40.580Z",
+    "lastRunVersion": "2026.3.23-2",
+    "lastRunCommand": "configure",
+    "lastRunMode": "local"
+  },
+  "auth": {
+    "profiles": {
+      "ollama:default": {
+        "provider": "ollama",
+        "mode": "api_key"
+      }
+    }
+  },
+  "models": {
+    "mode": "merge",
+    "providers": {
+      "ollama": {
+        "baseUrl": "http://192.168.1.112:11434",
+        "apiKey": "OLLAMA_API_KEY",
+        "api": "ollama",
+        "models": [
+          {
+            "id": "glm-4.7-flash",
+            "name": "glm-4.7-flash",
+            "reasoning": false,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 128000,
+            "maxTokens": 8192
+          },
+          {
+            "id": "senior-eng-1:latest",
+            "name": "senior-eng-1:latest",
+            "reasoning": false,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 163840,
+            "maxTokens": 8192
+          },
+          {
+            "id": "monitoring-agent:latest",
+            "name": "monitoring-agent:latest",
+            "reasoning": false,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 4096,
+            "maxTokens": 8192
+          },
+          {
+            "id": "senior-eng-2:latest",
+            "name": "senior-eng-2:latest",
+            "reasoning": false,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 16384,
+            "maxTokens": 8192
+          },
+          {
+            "id": "devops-agent:latest",
+            "name": "devops-agent:latest",
+            "reasoning": false,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 32768,
+            "maxTokens": 8192
+          },
+          {
+            "id": "quality-agent:latest",
+            "name": "quality-agent:latest",
+            "reasoning": false,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 32768,
+            "maxTokens": 8192
+          },
+          {
+            "id": "security-agent:latest",
+            "name": "security-agent:latest",
+            "reasoning": false,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 32768,
+            "maxTokens": 8192
+          },
+          {
+            "id": "coordinator:latest",
+            "name": "coordinator:latest",
+            "reasoning": false,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 32768,
+            "maxTokens": 8192
+          },
+          {
+            "id": "phi3:3.8b-mini-4k-instruct-q4_K_M",
+            "name": "phi3:3.8b-mini-4k-instruct-q4_K_M",
+            "reasoning": false,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 4096,
+            "maxTokens": 8192
+          },
+          {
+            "id": "qwen2.5:3b-instruct-q4_K_M",
+            "name": "qwen2.5:3b-instruct-q4_K_M",
+            "reasoning": false,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 32768,
+            "maxTokens": 8192
+          },
+          {
+            "id": "codellama:7b-instruct-q4_K_M",
+            "name": "codellama:7b-instruct-q4_K_M",
+            "reasoning": false,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 16384,
+            "maxTokens": 8192
+          },
+          {
+            "id": "mistral:7b-instruct-q4_K_M",
+            "name": "mistral:7b-instruct-q4_K_M",
+            "reasoning": false,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 32768,
+            "maxTokens": 8192
+          },
+          {
+            "id": "qwen2.5-coder:7b-instruct-q4_K_M",
+            "name": "qwen2.5-coder:7b-instruct-q4_K_M",
+            "reasoning": false,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 32768,
+            "maxTokens": 8192
+          },
+          {
+            "id": "codellama:13b-instruct-q4_K_M",
+            "name": "codellama:13b-instruct-q4_K_M",
+            "reasoning": false,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 16384,
+            "maxTokens": 8192
+          },
+          {
+            "id": "deepseek-coder-v2:16b-lite-instruct-q4_K_M",
+            "name": "deepseek-coder-v2:16b-lite-instruct-q4_K_M",
+            "reasoning": false,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 163840,
+            "maxTokens": 8192
+          },
+          {
+            "id": "qwen2.5-coder:32b-instruct-q4_K_M",
+            "name": "qwen2.5-coder:32b-instruct-q4_K_M",
+            "reasoning": false,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 32768,
+            "maxTokens": 8192
+          },
+          {
+            "id": "glm-4.7-flash:latest",
+            "name": "glm-4.7-flash:latest",
+            "reasoning": false,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 202752,
+            "maxTokens": 8192
+          },
+          {
+            "id": "deepseek-coder:33b-instruct-q4_K_M",
+            "name": "deepseek-coder:33b-instruct-q4_K_M",
+            "reasoning": false,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 16384,
+            "maxTokens": 8192
+          },
+          {
+            "id": "mistral:7b-instruct-v0.3-q4_K_M",
+            "name": "mistral:7b-instruct-v0.3-q4_K_M",
+            "reasoning": false,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 32768,
+            "maxTokens": 8192
+          },
+          {
+            "id": "llama3.1:8b-instruct-q4_K_M",
+            "name": "llama3.1:8b-instruct-q4_K_M",
+            "reasoning": false,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 131072,
+            "maxTokens": 8192
+          },
+          {
+            "id": "codellama:34b-instruct-q4_K_M",
+            "name": "codellama:34b-instruct-q4_K_M",
+            "reasoning": false,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 16384,
+            "maxTokens": 8192
+          },
+          {
+            "id": "qwen2.5:32b-instruct-q4_K_M",
+            "name": "qwen2.5:32b-instruct-q4_K_M",
+            "reasoning": false,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 32768,
+            "maxTokens": 8192
+          }
+        ]
+      },
+      "ollama-pc2": {
+        "baseUrl": "http://192.168.1.112:11434",
+        "apiKey": "ollama-local",
+        "api": "ollama",
+        "models": [
+          {
+            "id": "quality-agent:latest",
+            "name": "quality-agent:latest",
+            "reasoning": false,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 32768,
+            "maxTokens": 8192
+          },
+          {
+            "id": "security-agent:latest",
+            "name": "security-agent:latest",
+            "reasoning": false,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 32768,
+            "maxTokens": 8192
+          },
+          {
+            "id": "codellama:7b-instruct-q4_K_M",
+            "name": "codellama:7b-instruct-q4_K_M",
+            "reasoning": false,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            }
+          }
+        ]
+      },
+      "ollama-laptop": {
+        "baseUrl": "http://192.168.1.113:11434",
+        "apiKey": "ollama-local",
+        "api": "ollama",
+        "models": [
+          {
+            "id": "monitoring-agent:latest",
+            "name": "monitoring-agent:latest",
+            "reasoning": false,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 4096,
+            "maxTokens": 8192
+          },
+          {
+            "id": "devops-agent:latest",
+            "name": "devops-agent:latest",
+            "reasoning": false,
+            "input": [
+              "text"
+            ],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 32768,
+            "maxTokens": 8192
+          }
+        ]
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "ollama/coordinator:latest",
+        "fallbacks": [
+          "ollama/senior-eng-1:latest",
+          "ollama/senior-eng-2:latest",
+          "ollama/coordinator:latest",
+          "ollama-laptop/monitoring-agent:latest",
+          "ollama-laptop/devops-agent:latest",
+          "ollama-pc2/codellama:7b-instruct-q4_K_M",
+          "ollama-pc2/quality-agent:latest",
+          "ollama-pc2/security-agent:latest"
+        ]
+      },
+      "models": {
+        "ollama/senior-eng-1:latest": {},
+        "ollama/senior-eng-2:latest": {},
+        "ollama/coordinator:latest": {},
+        "ollama-laptop/devops-agent:latest": {},
+        "ollama-laptop/monitoring-agent:latest": {},
+        "ollama-pc2/codellama:7b-instruct-q4_K_M": {},
+        "ollama-pc2/quality-agent:latest": {},
+        "ollama-pc2/security-agent:latest": {}
+      },
+      "workspace": "~/.openclaw/workspace",
+      "timeoutSeconds": 600,
+      "maxConcurrent": 2
+    },
+    "list": [
+      {
+        "id": "coordinator",
+        "default": true,
+        "workspace": "C:\\Users\\atuadm\\.openclaw\\workspace-coordinator"
+      },
+      {
+        "id": "senior-engineer-1",
+        "workspace": "C:\\Users\\atuadm\\.openclaw\\workspace-senior-eng-1",
+        "model": "senior-eng-1:latest"
+      },
+      {
+        "id": "senior-engineer-2",
+        "workspace": "C:\\Users\\atuadm\\.openclaw\\workspace-senior-eng-2",
+        "model": "senior-eng-2:latest"
+      },
+      {
+        "id": "quality-agent",
+        "name": "quality-agent",
+        "workspace": "C:\\Users\\atuadm\\.openclaw\\workspace-quality",
+        "agentDir": "C:\\Users\\atuadm\\.openclaw\\agents\\quality-agent\\agent"
+      },
+      {
+        "id": "security-agent",
+        "name": "security-agent",
+        "workspace": "C:\\Users\\atuadm\\.openclaw\\workspace-security",
+        "agentDir": "C:\\Users\\atuadm\\.openclaw\\agents\\security-agent\\agent"
+      },
+      {
+        "id": "devops-agent",
+        "name": "devops-agent",
+        "workspace": "C:\\Users\\atuadm\\.openclaw\\workspace-devops",
+        "agentDir": "C:\\Users\\atuadm\\.openclaw\\agents\\devops-agent\\agent"
+      },
+      {
+        "id": "monitoring-agent",
+        "name": "monitoring-agent",
+        "workspace": "C:\\Users\\atuadm\\.openclaw\\workspace-monitoring",
+        "agentDir": "C:\\Users\\atuadm\\.openclaw\\agents\\monitoring-agent\\agent"
+      }
+    ]
+  },
+  "tools": {
+    "profile": "coding"
+  },
+  "commands": {
+    "native": "auto",
+    "nativeSkills": "auto",
+    "restart": true,
+    "ownerDisplay": "raw"
+  },
+  "session": {
+    "dmScope": "per-channel-peer"
+  },
+  "hooks": {
+    "enabled": true,
+    "path": "/hooks",
+    "token": "eyhjdf83hdhnd39o83nnd3hd3bi9873dbdb3uhfg",
+    "internal": {
+      "enabled": true,
+      "entries": {
+        "boot-md": {
+          "enabled": true
+        },
+        "bootstrap-extra-files": {
+          "enabled": true
+        },
+        "command-logger": {
+          "enabled": true
+        },
+        "session-memory": {
+          "enabled": true
+        }
+      }
+    }
+  },
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "dmPolicy": "pairing",
+      "botToken": "8769842428:AAG89sh5-oM2XdX9OMzwsFvTVmnSK-PCYRE",
+      "groups": {
+        "*": {
+          "requireMention": true
+        }
+      },
+      "groupPolicy": "allowlist",
+      "streaming": "partial"
+    }
+  },
+  "gateway": {
+    "port": 18789,
+    "mode": "local",
+    "bind": "lan",
+    "controlUi": {
+      "allowedOrigins": [
+        "http://localhost:18789",
+        "http://127.0.0.1:18789",
+        "http://192.168.1.106:18789",
+        "http://0.0.0.0:18789"
+      ]
+    },
+    "auth": {
+      "mode": "token",
+      "token": "18796e9e3998b4ba92cf5db7871363fc853f3158e9a6e1a0"
+    },
+    "tailscale": {
+      "mode": "off",
+      "resetOnExit": false
+    },
+    "remote": {
+      "transport": "direct"
+    },
+    "nodes": {
+      "denyCommands": [
+        "camera.snap",
+        "camera.clip",
+        "screen.record",
+        "contacts.add",
+        "calendar.add",
+        "reminders.add",
+        "sms.send"
+      ]
+    }
+  }
+}
