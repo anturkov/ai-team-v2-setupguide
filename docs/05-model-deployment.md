@@ -523,8 +523,8 @@ Verify each model can be reached by the Gateway. Since agents aren't registered 
 ```powershell
 # Test PC1 models (local Ollama)
 ollama run coordinator "Ready check. Identify yourself and your role. One sentence."
-ollama run senior-engineer-1 "Ready check. Identify yourself and your role. One sentence."
-ollama run senior-engineer-2 "Ready check. Identify yourself and your role. One sentence."
+ollama run senior-eng-1 "Ready check. Identify yourself and your role. One sentence."
+ollama run senior-eng-2 "Ready check. Identify yourself and your role. One sentence."
 
 # Test PC2 models (remote Ollama via API)
 $body = @{ model = "quality-agent"; prompt = "Ready check. Identify yourself."; stream = $false } | ConvertTo-Json
