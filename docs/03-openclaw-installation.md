@@ -303,7 +303,12 @@ Instead of running `openclaw onboard` (which sets up a local Gateway), connect t
 
 ```powershell
 # Connect to PC1's Gateway as a node
-openclaw node connect --gateway ws://192.168.1.106:18789 --token "your-secure-token-here"
+#openclaw node connect --gateway ws://192.168.1.106:18789 --token "your-secure-token-here"
+
+#ensure gateway shared token is in env
+#ensure OPENCLAW_ALLOW_INSECURE_PRIVATE_WS=1 in env
+#check node.json file and set gateway IP
+openclaw node run
 ```
 
 You should see output confirming the WebSocket connection to PC1's Gateway.
