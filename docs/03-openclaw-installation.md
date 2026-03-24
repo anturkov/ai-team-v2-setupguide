@@ -467,9 +467,21 @@ Expected output on success:
 From PC1, send a test webhook to PC2:
 
 ```powershell
-Invoke-RestMethod -Uri "http://192.168.1.112:18789/hooks/wake" `
+$bodyContent = @{
+    text = "Hello"
+}
+
+# 2. Convert the PowerShell object to a JSON string
+$jsonBody = $bodyContent | ConvertTo-Json
+
+# 3. Make the API call, ensuring to set the Content-Type header to application/json
+Invoke-RestMethod -Uri "http://192.168.1.113:18789/hooks/wake" -UseBasicParsing `
   -Method POST `
-  -Headers @{ "Authorization" = "Bearer your-webhook-secret-here" }
+  -Headers @{
+      "Authorization" = "Bearer eyhjdf83hdhnd39o83nnd3hd3bi9873dbdb3uhfg";
+      "Content-Type" = "application/json" # This is crucial for JSON bodies
+  } `
+  -Body $jsonBody
 ```
 
 You should get an HTTP 200 response. Repeat for each machine pair.
