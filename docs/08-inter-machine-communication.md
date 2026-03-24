@@ -1,205 +1,207 @@
 # Chapter 08 - Inter-Machine Communication
 
-This chapter covers how OpenClaw agents on different machines communicate via webhooks, how to verify communication is working, and how to troubleshoot connectivity issues.
+This chapter covers how the single OpenClaw Gateway on PC1 communicates with remote Ollama instances and Nodes on PC2 and Laptop.
 
 ---
 
 ## 8.1 How OpenClaw Cross-Machine Communication Works
 
-Each machine runs its own independent OpenClaw Gateway. Agents on different machines communicate via **webhooks** — HTTP requests between Gateways that trigger agent actions.
+OpenClaw uses a **hub-and-spoke** architecture, NOT independent gateways communicating via webhooks.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
-│                    OpenClaw Cross-Machine Message Flow                    │
+│                    OpenClaw Cross-Machine Architecture                    │
 │                                                                          │
-│  PC1 (192.168.1.106:18789)                                               │
-│  ┌──────────────┐    ┌──────────────┐    ┌────────────────────────────┐  │
-│  │ Coordinator  │───►│ OpenClaw     │───►│ Outbound webhook POST to  │  │
-│  │ Agent        │    │ Gateway      │    │ PC2 or Laptop Gateway     │  │
-│  └──────────────┘    └──────────────┘    └───────────┬────────────────┘  │
-│                                                       │                  │
-│                                          ┌────────────┼──────────┐       │
-│                                          ▼                       ▼       │
-│                              PC2 (192.168.1.112:18789)  Laptop (:18789) │
-│                              ┌──────────────┐    ┌──────────────┐       │
-│                              │ Gateway      │    │ Gateway      │       │
-│                              │ /hooks/agent │    │ /hooks/agent │       │
-│                              └──────┬───────┘    └──────┬───────┘       │
-│                                     ▼                   ▼               │
-│                              ┌──────────────┐    ┌──────────────┐       │
-│                              │ Quality or   │    │ DevOps or    │       │
-│                              │ Security     │    │ Monitoring   │       │
-│                              │ Agent        │    │ Agent        │       │
-│                              └──────────────┘    └──────────────┘       │
+│  PC1 (192.168.1.106) — THE GATEWAY                                      │
+│  ┌──────────────────────────────────────────────────────────────────┐    │
+│  │  Gateway (:18789)                                                │    │
+│  │                                                                  │    │
+│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐       │    │
+│  │  │Coordinat.│  │Sr.Eng #1 │  │Quality   │  │DevOps    │       │    │
+│  │  │(local)   │  │(local)   │  │(remote)  │  │(remote)  │ ...   │    │
+│  │  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘       │    │
+│  │       │              │             │             │              │    │
+│  │       ▼              ▼             ▼             ▼              │    │
+│  │  ┌──────────────────────────────────────────────────────────┐  │    │
+│  │  │              Model Provider Router                        │  │    │
+│  │  │  ollama-local  → 127.0.0.1:11434  (PC1)                 │  │    │
+│  │  │  ollama-pc2    → 192.168.1.112:11434  (PC2)              │  │    │
+│  │  │  ollama-laptop → 192.168.1.113:11434  (Laptop)           │  │    │
+│  │  │  anthropic     → api.anthropic.com  (Claude.ai)          │  │    │
+│  │  └──────────────────────────────────────────────────────────┘  │    │
+│  └──────────────────────────────────────────────────────────────────┘    │
+│       │                      │                     │                     │
+│       │ Ollama HTTP API      │ Ollama HTTP API     │ Ollama HTTP API    │
+│       ▼                      ▼                     ▼                     │
+│  ┌──────────┐        ┌──────────────┐      ┌──────────────┐            │
+│  │ Local    │        │ PC2          │      │ Laptop       │            │
+│  │ Ollama   │        │ Ollama       │      │ Ollama       │            │
+│  │ :11434   │        │ :11434       │      │ :11434       │            │
+│  └──────────┘        └──────────────┘      └──────────────┘            │
+│                             ▲                     ▲                     │
+│                             │ Node (WebSocket)    │ Node (WebSocket)   │
+│                       ┌─────┴──────┐        ┌─────┴──────┐            │
+│                       │ PC2 Node   │        │ Laptop Node│            │
+│                       │ (shell,    │        │ (shell,    │            │
+│                       │  files)    │        │  files)    │            │
+│                       └────────────┘        └────────────┘            │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
-Key concepts:
+There are **two communication channels** between machines:
 
-1. **Webhooks are HTTP POST requests** — The Coordinator agent on PC1 sends tasks to agents on other machines by POSTing to their Gateway's `/hooks/agent` endpoint
-2. **Authentication via shared token** — All webhook requests include a Bearer token in the `Authorization` header (configured in `hooks.token`)
-3. **Routing is agent-targeted** — The webhook payload specifies which agent should handle the request
-4. **Responses can be async** — The webhook returns HTTP 200 immediately; the target agent processes the task and can respond via a webhook back to PC1
-5. **All requests are logged** — For audit and debugging purposes
+### Channel 1: Ollama HTTP API (Model Inference)
 
----
+The Gateway on PC1 sends inference requests directly to remote Ollama instances via their HTTP API on port **11434**. This is how agents whose models run on PC2 or Laptop actually generate responses.
 
-## 8.2 Webhook Message Format
+- **Protocol**: HTTP REST API
+- **Port**: 11434
+- **Direction**: PC1 Gateway → Remote Ollama (one-way; Gateway sends prompts, Ollama returns completions)
+- **Configuration**: `models.providers` in `openclaw.json` on PC1
 
-When the Coordinator sends a task to a remote agent, it POSTs to the target Gateway's webhook endpoint:
+### Channel 2: Node WebSocket (Remote Shell Execution)
 
-**Endpoint**: `POST http://<target-ip>:18789/hooks/agent`
+PC2 and Laptop run OpenClaw Nodes that connect to PC1's Gateway via WebSocket on port **18789**. This allows agents to execute shell commands on remote machines (e.g., run tests, check disk space, deploy code).
 
-**Headers**:
-```
-Authorization: Bearer <hooks.token>
-Content-Type: application/json
-```
+- **Protocol**: WebSocket
+- **Port**: 18789 (PC1's Gateway port)
+- **Direction**: Nodes connect TO the Gateway (outbound from PC2/Laptop)
+- **Capabilities**: `system.run` (shell commands), `system.which` (binary lookup), file access
 
-**Body**:
-```json
-{
-  "prompt": "Review this code snippet and report any issues:\n\ndef add(a, b):\n    return a + b + 1  # Bug: adds extra 1\n\nRespond with your review findings.",
-  "agentId": "quality-agent",
-  "sessionKey": "task:2026-001",
-  "replyTo": {
-    "url": "http://192.168.1.106:18789/hooks/agent",
-    "agentId": "coordinator",
-    "sessionKey": "task:2026-001"
-  }
-}
-```
-
-| Field | Purpose |
-|-------|---------|
-| `prompt` | The task/message for the target agent |
-| `agentId` | Which agent on the target machine should handle this |
-| `sessionKey` | Session identifier for conversation continuity |
-| `replyTo` | (Optional) Where the agent should send its response back |
-
-You don't need to construct these manually — the Coordinator agent's skills handle webhook dispatch (see [Chapter 06](06-team-configuration.md) for skill setup).
+> **Important distinction**: Model inference goes via Ollama HTTP API (port 11434). Shell execution goes via Node WebSocket (port 18789). These are separate channels.
 
 ---
 
-## 8.3 Setting Up Cross-Machine Communication
+## 8.2 Verifying Ollama Connectivity
 
-If you followed [Chapter 03](03-openclaw-installation.md) correctly, the webhook endpoints should already be configured. This section verifies and tests them.
+The Gateway needs to reach Ollama on all three machines. Test from PC1:
 
-### 8.3.1 Verify Gateway Health on All Machines
-
-On each machine:
+### Test Local Ollama (PC1)
 
 ```powershell
-openclaw gateway status
-openclaw gateway health
+Invoke-RestMethod -Uri "http://127.0.0.1:11434/api/tags" -Method GET
 ```
 
-All three Gateways should be running and healthy.
-
-### 8.3.2 Probe Cross-Machine Gateways
-
-From PC1:
+### Test PC2 Ollama
 
 ```powershell
-# Probe PC2
-openclaw gateway probe --url http://192.168.1.112:18789
-
-# Probe Laptop
-openclaw gateway probe --url http://192.168.1.113:18789
+Invoke-RestMethod -Uri "http://192.168.1.112:11434/api/tags" -Method GET
 ```
 
-Both should return a successful probe result.
-
-### 8.3.3 Test Webhook Delivery
-
-From PC1, send a test webhook to PC2's quality-agent:
+### Test Laptop Ollama
 
 ```powershell
-# Wake test (lightweight, just confirms the endpoint is reachable)
-Invoke-RestMethod -Uri "http://192.168.1.112:18789/hooks/wake" `
-  -Method POST `
-  -Headers @{ "Authorization" = "Bearer YOUR_WEBHOOK_SECRET_HERE" }
+Invoke-RestMethod -Uri "http://192.168.1.113:11434/api/tags" -Method GET
 ```
 
-Then test an actual agent prompt:
+All should return a JSON response listing the models on that machine. If any fail, see [Section 8.5 - Troubleshooting](#85-troubleshooting-cross-machine-issues).
+
+### Test Inference on Remote Ollama
 
 ```powershell
-# Send a task to quality-agent on PC2
+# Test a remote model on PC2
 $body = @{
-    prompt = "Ping test. Please respond with your name, role, and current machine."
-    agentId = "quality-agent"
-    sessionKey = "hook:test-001"
+    model = "quality-agent"
+    prompt = "Say hello in one sentence."
+    stream = $false
 } | ConvertTo-Json
 
-Invoke-RestMethod -Uri "http://192.168.1.112:18789/hooks/agent" `
+Invoke-RestMethod -Uri "http://192.168.1.112:11434/api/generate" `
   -Method POST `
-  -Headers @{
-    "Authorization" = "Bearer YOUR_WEBHOOK_SECRET_HERE"
-    "Content-Type" = "application/json"
-  } `
-  -Body $body
+  -Body $body `
+  -ContentType "application/json"
 ```
 
-**Test all routes:**
+---
+
+## 8.3 Verifying Node Connectivity
+
+### Check Connected Nodes on PC1
 
 ```powershell
-# PC1 → PC2 (quality-agent)
-# PC1 → PC2 (security-agent)
-# PC1 → Laptop (devops-agent)
-# PC1 → Laptop (monitoring-agent)
+openclaw devices list
 ```
 
-Repeat the above with each `agentId` and target IP.
+You should see PC2 and Laptop listed as connected nodes.
 
-### 8.3.4 Test Round-Trip Communication
+### Test Shell Execution on Remote Nodes
 
-A full round-trip: Coordinator sends a task via webhook, the remote agent processes it, and responds back via webhook to the Coordinator.
+From PC1, run a command on a remote node:
 
-This requires the Coordinator agent's dispatch skill to be configured (see [Chapter 06](06-team-configuration.md)). Once configured, the Coordinator can send tasks and receive responses automatically.
+```powershell
+# Run a command on PC2's node
+openclaw nodes run --device <pc2-device-id> "hostname"
+
+# Run a command on Laptop's node
+openclaw nodes run --device <laptop-device-id> "hostname"
+```
+
+Each should return the hostname of the remote machine.
+
+> **Known Issue ([#20669](https://github.com/openclaw/openclaw/issues/20669))**: The agent runtime's exec tool may not properly dispatch to remote nodes — it routes to the gateway host instead. The CLI `openclaw nodes run` command works correctly. This is a known bug being tracked.
 
 ---
 
 ## 8.4 Network Configuration
 
-### 8.4.1 Windows Firewall Rules
+### 8.4.1 Required Ports
 
-If machines can't communicate, you may need to add firewall rules. Run these on **each machine** (as Administrator):
+| Port | Protocol | Direction | Purpose |
+|------|----------|-----------|---------|
+| **18789** | TCP | Inbound on PC1 only | Gateway — Nodes connect TO this |
+| **11434** | TCP | Inbound on PC2 + Laptop | Ollama — Gateway connects TO this |
+
+> **Note**: PC2 and Laptop do NOT need port 18789 open for inbound traffic. Their Nodes connect outbound to PC1. Only Ollama (11434) needs inbound access on PC2/Laptop.
+
+### 8.4.2 Windows Firewall Rules
+
+**On PC1** (Gateway — accepts Node connections):
 
 ```powershell
-# Allow OpenClaw Gateway inbound traffic (port 18789)
-New-NetFirewallRule -DisplayName "OpenClaw Gateway" -Direction Inbound -Protocol TCP -LocalPort 18789 -Action Allow
-
-# Allow Ollama inbound traffic (port 11434) - for direct cross-machine model access
-New-NetFirewallRule -DisplayName "Ollama" -Direction Inbound -Protocol TCP -LocalPort 11434 -Action Allow
+New-NetFirewallRule -DisplayName "OpenClaw Gateway" `
+  -Direction Inbound -Protocol TCP -LocalPort 18789 `
+  -Action Allow -Profile Private
 ```
 
-**Verify the rules were created:**
+**On PC2 and Laptop** (Ollama — accepts inference requests from PC1):
 
 ```powershell
-Get-NetFirewallRule -DisplayName "OpenClaw*" | Format-Table -Property DisplayName, Enabled, Direction, Action
-Get-NetFirewallRule -DisplayName "Ollama" | Format-Table -Property DisplayName, Enabled, Direction, Action
+New-NetFirewallRule -DisplayName "Ollama Remote Access" `
+  -Direction Inbound -Protocol TCP -LocalPort 11434 `
+  -Action Allow -Profile Private
 ```
 
-### 8.4.2 Test Port Connectivity
-
-From PC1, test that you can reach the Gateway port on other machines:
+**Verify the rules:**
 
 ```powershell
-# Test OpenClaw Gateway on PC2
-Test-NetConnection -ComputerName 192.168.1.112 -Port 18789
+Get-NetFirewallRule -DisplayName "OpenClaw*","Ollama*" |
+  Format-Table -Property DisplayName, Enabled, Direction, Action
+```
 
-# Test OpenClaw Gateway on Laptop
-Test-NetConnection -ComputerName 192.168.1.113 -Port 18789
+### 8.4.3 Test Port Connectivity
 
-# Test Ollama on PC2 (if direct model access is needed)
+From PC1:
+
+```powershell
+# Test Ollama on PC2
 Test-NetConnection -ComputerName 192.168.1.112 -Port 11434
+
+# Test Ollama on Laptop
+Test-NetConnection -ComputerName 192.168.1.113 -Port 11434
 ```
 
-Each should show `TcpTestSucceeded : True`.
+From PC2 and Laptop:
 
-### 8.4.3 Static IP Configuration (Recommended)
+```powershell
+# Test Gateway on PC1
+Test-NetConnection -ComputerName 192.168.1.106 -Port 18789
+```
 
-To prevent IP addresses from changing (which breaks webhook URLs), set static IPs on each machine.
+All should show `TcpTestSucceeded : True`.
+
+### 8.4.4 Static IP Configuration (Recommended)
+
+To prevent IP addresses from changing, set static IPs on each machine.
 
 **On each machine:**
 
@@ -216,141 +218,82 @@ To prevent IP addresses from changing (which breaks webhook URLs), set static IP
 | PC2 | 192.168.1.112 | 255.255.255.0 | 192.168.1.1 | 192.168.1.1 |
 | Laptop | 192.168.1.113 | 255.255.255.0 | 192.168.1.1 | 192.168.1.1 |
 
-> **Note**: Adjust the gateway and DNS to match your router's address. Common values are `192.168.1.1` or `192.168.0.1`.
+> **Note**: Adjust the gateway and DNS to match your router's address.
 
 ---
 
-## 8.5 Communication Patterns
+## 8.5 Troubleshooting Cross-Machine Issues
 
-### 8.5.1 Request-Response via Webhooks
-
-The Coordinator sends a task to a remote agent and receives the result back via a webhook callback:
-
-```
-PC1 Coordinator ──POST /hooks/agent──► PC2 Quality Agent
-     (includes replyTo URL)
-                                           │
-PC1 Coordinator ◄──POST /hooks/agent───────┘
-     (receives result via callback)
-```
-
-The `replyTo` field in the webhook payload tells the remote agent where to send its response.
-
-### 8.5.2 Fire-and-Forget
-
-Send a task without expecting a response (useful for notifications and monitoring triggers):
-
-```powershell
-$body = @{
-    prompt = "New deployment started. Begin monitoring resource usage for the next 30 minutes."
-    agentId = "monitoring-agent"
-    sessionKey = "hook:monitor-deploy-001"
-} | ConvertTo-Json
-
-Invoke-RestMethod -Uri "http://192.168.1.113:18789/hooks/agent" `
-  -Method POST `
-  -Headers @{
-    "Authorization" = "Bearer YOUR_WEBHOOK_SECRET_HERE"
-    "Content-Type" = "application/json"
-  } `
-  -Body $body
-```
-
-### 8.5.3 Broadcast (via Coordinator Skill)
-
-The Coordinator agent can broadcast to all agents by dispatching webhooks to each machine. This is implemented as a Coordinator skill, not a built-in command. See [Chapter 06](06-team-configuration.md) for the broadcast skill setup.
-
-### 8.5.4 Peer-to-Peer
-
-Agents on different machines can communicate directly via webhooks without going through the Coordinator, as long as both Gateways have webhooks enabled and the agent IDs are in `allowedAgentIds`:
-
-```
-PC2 Quality Agent ──POST /hooks/agent──► PC2 Security Agent (same machine, local)
-PC2 Quality Agent ──POST /hooks/agent──► Laptop DevOps Agent (cross-machine)
-```
-
----
-
-## 8.6 Webhook Security
-
-### 8.6.1 Token Authentication
-
-Every webhook request **must** include the hook token in the `Authorization` header:
-
-```
-Authorization: Bearer <hooks.token>
-```
-
-> **Important**: Query-string tokens are rejected (return HTTP 400). Always use the header.
-
-### 8.6.2 Allowed Agent IDs
-
-Each Gateway only accepts webhooks for agents listed in `hooks.allowedAgentIds`:
-
-```json5
-hooks: {
-  allowedAgentIds: ["quality-agent", "security-agent"]  // Only these agents
-  // or: ["*"]  // Any agent (less secure)
-}
-```
-
-### 8.6.3 Session Key Prefixes
-
-Limit which session keys webhooks can create:
-
-```json5
-hooks: {
-  allowedSessionKeyPrefixes: ["hook:", "task:"]  // Only sessions starting with these
-}
-```
-
----
-
-## 8.7 Latency Expectations
-
-| Route | Expected Latency | Notes |
-|-------|------------------|-------|
-| PC1 → PC1 (same Gateway) | < 1 ms | Internal agent routing |
-| PC1 → PC2 (webhook) | 5-50 ms | Network hop + HTTP overhead |
-| PC1 → Laptop (webhook) | 5-100 ms | Depends on Wi-Fi vs Ethernet |
-| Model response time (GPU) | 5-60 seconds | Depends on model size and prompt |
-| Model response time (CPU) | 30-180 seconds | Much slower, avoid if possible |
-
-> **The bottleneck is always model inference, not network latency.** A 32B model takes ~15-30 seconds to generate a response, making 50ms of webhook overhead negligible.
-
----
-
-## 8.8 Troubleshooting Cross-Machine Issues
+### Ollama Not Reachable from PC1
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| Connection refused | Gateway not running or wrong port | `openclaw gateway status` on target machine |
-| HTTP 401 Unauthorized | Wrong webhook token | Check `hooks.token` matches on both machines |
-| HTTP 400 Bad Request | Token in query string, not header | Use `Authorization: Bearer <token>` header |
-| HTTP 404 Not Found | Wrong webhook path | Check `hooks.path` config (default: `/hooks`) |
-| Agent not found | `agentId` not in `allowedAgentIds` | Add the agent to `hooks.allowedAgentIds` |
-| Timeout | Firewall blocking port 18789 | Add firewall rule (Section 8.4.1) |
-| Gateway not reachable | Bound to loopback only | Set `gateway.bind` to `"lan"` |
+| Connection refused on :11434 | Ollama only listening on localhost | Set `OLLAMA_HOST=0.0.0.0:11434` and restart Ollama ([Chapter 04](04-ollama-setup.md#43-configure-ollama-for-network-access)) |
+| Timeout on :11434 | Firewall blocking | Add inbound rule for port 11434 (Section 8.4.2) |
+| Empty model list | Models not downloaded on remote | Run `ollama list` on the remote machine to check |
+| Wrong models showing | Provider URL misconfigured | Check `models.providers` in `openclaw.json` — verify IP addresses |
+
+### Node Not Connecting to Gateway
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| Connection refused on :18789 | Gateway not running or bound to loopback | Start Gateway and set `gateway.bind` to `"lan"` |
+| Auth rejected | Token mismatch | Ensure `OPENCLAW_GATEWAY_TOKEN` matches on all machines |
+| Device not approved | Pairing not accepted | Run `openclaw devices list --pending` on PC1 and approve |
+| `spawn /usr/bin/ssh ENOENT` | SSH path bug on Windows | Set `agents.defaults.sandbox.ssh.command` to `"ssh"` ([Chapter 03](03-openclaw-installation.md#36-verify-cross-machine-connectivity)) |
+
+### Agent Can't Use Remote Model
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| Model not found | Model name mismatch | Verify model name in `ollama list` on remote matches agent config |
+| Model not in allowlist | `agents.defaults.models` missing entry | Add the model name to the allowlist in `openclaw.json` |
+| Provider not configured | Missing provider in `models.providers` | Add the remote Ollama provider (see [Chapter 05](05-model-deployment.md#55-configure-model-providers-on-pc1s-gateway)) |
+| Tool calling fails | Using `/v1` suffix | Remove `/v1` from the Ollama provider URL |
 
 Check Gateway logs for detailed error messages:
 
 ```powershell
-openclaw logs
+openclaw logs --follow
 ```
 
 ---
 
-## 8.9 Checklist
+## 8.6 Latency Expectations
 
-- [ ] All Gateways running and healthy (`openclaw gateway health` on each machine)
-- [ ] Gateway probe succeeds from PC1 to PC2 and Laptop
-- [ ] Windows Firewall rules added for OpenClaw (port 18789) and Ollama (port 11434)
-- [ ] Port connectivity verified with `Test-NetConnection`
+| Route | Expected Latency | Notes |
+|-------|------------------|-------|
+| PC1 agent → PC1 Ollama (local) | < 1 ms network | Localhost connection |
+| PC1 agent → PC2 Ollama (remote) | 1-5 ms network | LAN HTTP request |
+| PC1 agent → Laptop Ollama (remote) | 1-10 ms network | Depends on Wi-Fi vs Ethernet |
+| Model inference (GPU, 7B) | 3-15 seconds | Depends on prompt length |
+| Model inference (GPU, 32B) | 15-60 seconds | Large model, longer generation |
+| Model inference (CPU fallback) | 30-180 seconds | Much slower, avoid if possible |
+| Node shell command dispatch | 50-200 ms overhead | WebSocket + command execution |
+
+> **The bottleneck is always model inference, not network latency.** A 32B model takes ~15-30 seconds to generate a response, making a few milliseconds of network overhead negligible.
+
+---
+
+## 8.7 Webhooks — For External Services Only
+
+> **Clarification**: OpenClaw webhooks are designed for **external service integrations** (GitHub, Stripe, CI/CD systems, etc.), NOT for inter-machine agent communication. In our architecture, agents communicate via the Gateway's native multi-agent routing, and remote inference goes via Ollama HTTP API.
+
+Webhooks are covered in [Chapter 09 - GitHub Integration](09-github-integration.md) where they're used to trigger agents from GitHub events (push, PR, etc.).
+
+---
+
+## 8.8 Checklist
+
+- [ ] PC1 Gateway running and bound to LAN (`openclaw gateway status`)
+- [ ] PC2 and Laptop Ollama bound to `0.0.0.0:11434` (not just localhost)
+- [ ] Remote Ollama providers configured in `openclaw.json` on PC1
+- [ ] `Invoke-RestMethod` to PC2:11434 and Laptop:11434 returns model list from PC1
+- [ ] `openclaw models status` on PC1 shows models from all three providers
+- [ ] PC2 and Laptop Nodes connected (`openclaw devices list` on PC1)
+- [ ] Node shell execution works (`openclaw nodes run --device <id> "hostname"`)
+- [ ] Windows Firewall: port 18789 open on PC1, port 11434 open on PC2 + Laptop
 - [ ] Static IPs configured (recommended)
-- [ ] Webhook wake test succeeds (PC1 → PC2, PC1 → Laptop)
-- [ ] Webhook agent test succeeds (task delivered to correct agent)
-- [ ] Webhook tokens match across all machines
-- [ ] `allowedAgentIds` configured correctly on PC2 and Laptop
 
 ---
 

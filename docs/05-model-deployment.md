@@ -423,78 +423,127 @@ You should see the custom model names alongside the base models.
 
 ---
 
-## 5.5 Register Models with OpenClaw
+## 5.5 Configure Model Providers on PC1's Gateway
 
-After creating the Ollama models, register them with OpenClaw so the cluster knows what's available:
+> **Architecture note**: There is no `openclaw model register` command. OpenClaw discovers models through **providers** configured in `openclaw.json` on PC1 (the Gateway). Since our models run on Ollama instances across three machines, we configure three Ollama providers — one for each machine.
 
-### On PC1:
+All configuration happens **on PC1 only** (the Gateway). PC2 and Laptop just run Ollama — they don't need any OpenClaw model configuration.
+
+### Step 1: Configure Remote Ollama Providers
+
+If you haven't already done this in [Chapter 03](03-openclaw-installation.md), edit `~/.openclaw/openclaw.json` on PC1:
+
+```json5
+{
+  models: {
+    providers: {
+      // PC1's local Ollama — coordinator and senior engineers
+      "ollama-local": {
+        baseUrl: "http://127.0.0.1:11434",
+        apiKey: "ollama-local",
+        api: "ollama"
+      },
+      // PC2's remote Ollama — quality and security agents
+      "ollama-pc2": {
+        baseUrl: "http://192.168.1.112:11434",
+        apiKey: "ollama-pc2",
+        api: "ollama"
+      },
+      // Laptop's remote Ollama — devops and monitoring agents
+      "ollama-laptop": {
+        baseUrl: "http://192.168.1.113:11434",
+        apiKey: "ollama-laptop",
+        api: "ollama"
+      }
+    }
+  }
+}
+```
+
+> **Important**: Do NOT add `/v1` to Ollama URLs. The `/v1` suffix activates OpenAI-compatible mode, which breaks tool calling with local models.
+
+### Step 2: Add Models to the Allowlist
+
+Each agent needs its model added to the allowlist. In `openclaw.json` on PC1:
+
+```json5
+{
+  agents: {
+    defaults: {
+      models: [
+        "coordinator",
+        "senior-engineer-1",
+        "senior-engineer-2",
+        "quality-agent",
+        "security-agent",
+        "devops-agent",
+        "monitoring-agent",
+        "codellama:7b-instruct-q4_K_M"
+      ]
+    }
+  }
+}
+```
+
+### Step 3: Verify Model Availability
+
+On PC1, check which models the Gateway can see:
 
 ```powershell
-openclaw model register --name "coordinator" --ollama-model "coordinator" --role "coordinator" --priority 1
-openclaw model register --name "senior-engineer-1" --ollama-model "senior-engineer-1" --role "engineer" --priority 2
-openclaw model register --name "senior-engineer-2" --ollama-model "senior-engineer-2" --role "engineer" --priority 2
+openclaw models status
 ```
 
-### On PC2:
+This queries all configured providers and shows which models are available. You should see the custom models from all three Ollama instances.
+
+> **Note**: `openclaw models status` only shows models visible to the Gateway through its configured providers. It does NOT scan the network — it checks the specific Ollama URLs you configured.
+
+### Step 4: Test Remote Ollama Connectivity
+
+If `openclaw models status` doesn't show PC2 or Laptop models, verify the Ollama instances are reachable:
 
 ```powershell
-openclaw model register --name "quality-agent" --ollama-model "quality-agent" --role "reviewer" --priority 3
-openclaw model register --name "security-agent" --ollama-model "security-agent" --role "security" --priority 3
-openclaw model register --name "backup-engineer" --ollama-model "codellama:7b-instruct-q4_K_M" --role "engineer" --priority 4
+# Test PC2's Ollama from PC1
+Invoke-RestMethod -Uri "http://192.168.1.112:11434/api/tags" -Method GET
+
+# Test Laptop's Ollama from PC1
+Invoke-RestMethod -Uri "http://192.168.1.113:11434/api/tags" -Method GET
 ```
 
-### On Laptop:
-
-```powershell
-openclaw model register --name "devops-agent" --ollama-model "devops-agent" --role "devops" --priority 3
-openclaw model register --name "monitoring-agent" --ollama-model "monitoring-agent" --role "monitor" --priority 3
-```
-
-### Verify All Models Registered:
-
-From any machine:
-
-```powershell
-openclaw model list
-```
-
-Expected output:
-
-```
-Registered Models
-═══════════════════════════════════════════════════════════════════════
-Name                Node              Role         Priority   Status
-───────────────────────────────────────────────────────────────────────
-coordinator         pc1-coordinator   coordinator  1          READY
-senior-engineer-1   pc1-coordinator   engineer     2          READY
-senior-engineer-2   pc1-coordinator   engineer     2          READY
-quality-agent       pc2-worker        reviewer     3          READY
-security-agent      pc2-worker        security     3          READY
-backup-engineer     pc2-worker        engineer     4          READY
-devops-agent        laptop-monitor    devops       3          READY
-monitoring-agent    laptop-monitor    monitor      3          READY
-═══════════════════════════════════════════════════════════════════════
-```
+If these fail, check:
+1. Ollama is running on the remote machine (`ollama list`)
+2. Ollama is bound to all interfaces (`OLLAMA_HOST=0.0.0.0:11434` — see [Chapter 04](04-ollama-setup.md#43-configure-ollama-for-network-access))
+3. Firewall allows inbound on port 11434 (see [Chapter 08](08-inter-machine-communication.md))
 
 ---
 
-## 5.6 Test Each Agent
+## 5.6 Test Each Model
 
-Send a quick test message to each agent through OpenClaw:
-
-```powershell
-# Test coordinator
-openclaw message send --to coordinator --content "Ready check. Identify yourself and your role."
-
-# Test all agents
-openclaw message broadcast --content "Ready check. Identify yourself and your role."
-```
-
-Each agent should respond with its name and role. Check the responses:
+Verify each model can be reached by the Gateway. Since agents aren't registered yet (that's [Chapter 06](06-team-configuration.md)), test the models directly via Ollama API from PC1:
 
 ```powershell
-openclaw message inbox --limit 10
+# Test PC1 models (local Ollama)
+ollama run coordinator "Ready check. Identify yourself and your role. One sentence."
+ollama run senior-engineer-1 "Ready check. Identify yourself and your role. One sentence."
+ollama run senior-engineer-2 "Ready check. Identify yourself and your role. One sentence."
+
+# Test PC2 models (remote Ollama via API)
+$body = @{ model = "quality-agent"; prompt = "Ready check. Identify yourself."; stream = $false } | ConvertTo-Json
+Invoke-RestMethod -Uri "http://192.168.1.112:11434/api/generate" -Method POST -Body $body -ContentType "application/json"
+
+$body = @{ model = "security-agent"; prompt = "Ready check. Identify yourself."; stream = $false } | ConvertTo-Json
+Invoke-RestMethod -Uri "http://192.168.1.112:11434/api/generate" -Method POST -Body $body -ContentType "application/json"
+
+# Test Laptop models (remote Ollama via API)
+$body = @{ model = "devops-agent"; prompt = "Ready check. Identify yourself."; stream = $false } | ConvertTo-Json
+Invoke-RestMethod -Uri "http://192.168.1.113:11434/api/generate" -Method POST -Body $body -ContentType "application/json"
+
+$body = @{ model = "monitoring-agent"; prompt = "Ready check. Identify yourself."; stream = $false } | ConvertTo-Json
+Invoke-RestMethod -Uri "http://192.168.1.113:11434/api/generate" -Method POST -Body $body -ContentType "application/json"
 ```
+
+Each model should respond with its name and role based on the system prompt in its Modelfile.
+
+> **Note**: There is no `openclaw message send` or `openclaw message broadcast` command. Model testing at this stage is done directly via the Ollama API. Full agent-to-agent communication is configured in [Chapter 06](06-team-configuration.md).
 
 ---
 
@@ -512,20 +561,36 @@ The External Consultant uses Claude.ai via API, not a local model.
 ### Step 2: Configure in OpenClaw (on PC1)
 
 ```powershell
-# Store the API key securely
-openclaw config set claude.api_key "sk-ant-your-key-here"
-openclaw config set claude.model "claude-sonnet-4-20250514"
-openclaw config set claude.max_tokens 4096
+# Paste your Anthropic API key into OpenClaw's secure credential store
+openclaw models auth paste-token --provider anthropic
+# When prompted, paste your sk-ant-... key
+```
 
-# Register as an external model
-openclaw model register --name "external-consultant" --type "external" --provider "claude" --role "consultant" --priority 5
+The Anthropic provider should already exist in `openclaw.json` from the onboarding step. If not, add it:
+
+```json5
+{
+  models: {
+    providers: {
+      anthropic: {
+        // API key is stored securely via the auth command above
+        // No need to put it in the config file
+      }
+    }
+  }
+}
 ```
 
 ### Step 3: Test the Consultant
 
+From PC1, verify the Anthropic provider works:
+
 ```powershell
-openclaw message send --to external-consultant --content "Ready check. Identify yourself."
+openclaw models status
+# Should show "anthropic" provider as connected with available models
 ```
+
+> **Note**: Full agent testing happens after agents are registered in [Chapter 06](06-team-configuration.md). At this stage, you're just confirming the provider connection works.
 
 > **Cost awareness**: Every message to the external consultant uses API credits. The coordinator should only route complex problems to it.
 
@@ -533,13 +598,16 @@ openclaw message send --to external-consultant --content "Ready check. Identify 
 
 ## 5.8 Checklist
 
-- [ ] All Modelfiles created on their respective machines
-- [ ] All custom models built with `ollama create`
-- [ ] All models registered with OpenClaw
-- [ ] `openclaw model list` shows all 8 models as READY
-- [ ] Each model responds to test messages
-- [ ] Claude.ai API key configured (if using external consultant)
-- [ ] External consultant responds to test messages
+- [ ] All Modelfiles created on their respective machines (`C:\AI-Team\models\`)
+- [ ] All custom models built with `ollama create` on their target machines
+- [ ] `ollama list` shows custom models on PC1, PC2, and Laptop
+- [ ] Remote Ollama providers configured in `openclaw.json` on PC1 (`ollama-local`, `ollama-pc2`, `ollama-laptop`)
+- [ ] Model allowlist configured in `agents.defaults.models`
+- [ ] `openclaw models status` on PC1 shows models from all three providers
+- [ ] Remote Ollama reachable from PC1 (`Invoke-RestMethod` to port 11434)
+- [ ] Each model responds to direct API test
+- [ ] Claude.ai API key configured via `openclaw models auth paste-token --provider anthropic`
+- [ ] Anthropic provider shows as connected in `openclaw models status`
 
 ---
 

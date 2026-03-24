@@ -8,39 +8,50 @@ This chapter walks you through installing and configuring OpenClaw on all three 
 
 OpenClaw is an open-source autonomous AI agent platform that runs locally on your machines. It bridges messaging platforms (Telegram, Discord, Slack, and others) to AI models via a **Gateway** process, and provides a rich set of capabilities:
 
-- **Gateway**: The core process that bridges channels (Telegram, etc.) to AI agents — runs on each machine independently
-- **Multi-Agent Routing**: Each Gateway can host multiple agents, each with its own workspace, model, and behavior
+- **Gateway**: The single control-plane process that manages all agents, channels, and model routing — runs on **one machine** (PC1)
+- **Nodes**: Companion processes on secondary machines that connect TO the Gateway via WebSocket — they provide a command surface (shell execution, file access) on remote hardware
+- **Multi-Agent Routing**: The Gateway hosts multiple agents, each with its own workspace, model provider, and behavior
 - **Skills**: Natural-language API integrations defined as `SKILL.md` files in agent workspaces
-- **Webhooks**: HTTP endpoints for inter-machine agent communication
+- **Remote Ollama Providers**: The Gateway connects to Ollama instances on remote machines via their HTTP API (port 11434) to run inference on distributed hardware
 - **Memory**: Local SQLite-based RAG system for persistent agent knowledge
-- **Model Discovery**: Auto-discovers Ollama models and supports multiple providers
 - **Telegram Integration**: Native channel support for human interaction via BotFather bots
 - **Health Monitoring**: Built-in diagnostics via `openclaw doctor`
 
-> **Architecture**: Each machine runs its **own independent Gateway**. There is no central "cluster" or "node" model. Machines communicate via **webhooks** between their Gateways. PC1 hosts the Coordinator agent and the Telegram bot. PC2 and the Laptop each run their own Gateway with their specialized agents.
+> **Architecture — Hub and Spoke**: OpenClaw uses a **single Gateway** model. PC1 runs the Gateway — it is the sole control plane. **All agents are registered on PC1's Gateway**, even those whose models run on remote Ollama instances. PC2 and the Laptop run as **Nodes** that connect to PC1's Gateway via WebSocket, providing remote shell execution. The Gateway accesses models on PC2/Laptop by connecting directly to their Ollama HTTP API (port 11434). **There is no "gateway per machine" — only one Gateway exists.**
 
 ```
-┌─────────────────────┐     ┌─────────────────────┐     ┌─────────────────────┐
-│  PC1 (Gateway)      │     │  PC2 (Gateway)      │     │  Laptop (Gateway)   │
-│  :18789             │◄───►│  :18789             │◄───►│  :18789             │
-│                     │     │                     │     │                     │
-│  Agents:            │     │  Agents:            │     │  Agents:            │
-│  - Coordinator      │     │  - Quality Agent    │     │  - DevOps Agent     │
-│  - Sr. Engineer #1  │     │  - Security Agent   │     │  - Monitoring Agent │
-│  - Sr. Engineer #2  │     │  - (overflow)       │     │                     │
-│                     │     │                     │     │                     │
-│  Channels:          │     │  Webhooks:          │     │  Webhooks:          │
-│  - Telegram Bot     │     │  - /hooks/agent     │     │  - /hooks/agent     │
-│  Webhooks:          │     │                     │     │                     │
-│  - /hooks/agent     │     │                     │     │                     │
-└─────────────────────┘     └─────────────────────┘     └─────────────────────┘
-        ▲
-        │ Telegram Bot API
-        ▼
-  ┌───────────┐
-  │  Human    │
-  │ (Telegram)│
-  └───────────┘
+                    ┌───────────┐
+                    │  Human    │
+                    │ (Telegram)│
+                    └─────┬─────┘
+                          │ Telegram Bot API
+                          ▼
+┌──────────────────────────────────────────────────────────┐
+│  PC1 (192.168.1.106) — THE GATEWAY (:18789)              │
+│                                                          │
+│  All Agents (registered here):                           │
+│  ├── Coordinator         → ollama-local (PC1)            │
+│  ├── Senior Engineer #1  → ollama-local (PC1)            │
+│  ├── Senior Engineer #2  → ollama-local (PC1)            │
+│  ├── Quality Agent       → ollama-pc2 (PC2:11434)        │
+│  ├── Security Agent      → ollama-pc2 (PC2:11434)        │
+│  ├── DevOps Agent        → ollama-laptop (Laptop:11434)  │
+│  ├── Monitoring Agent    → ollama-laptop (Laptop:11434)  │
+│  └── External Consultant → Anthropic API                 │
+│                                                          │
+│  Channels: Telegram Bot                                  │
+└─────────┬────────────────────────────┬───────────────────┘
+          │ Node (WebSocket)           │ Node (WebSocket)
+          │ + Ollama API (:11434)      │ + Ollama API (:11434)
+          ▼                            ▼
+┌───────────────────────┐   ┌───────────────────────────┐
+│  PC2 (192.168.1.112)  │   │  Laptop (192.168.1.113)   │
+│  OpenClaw Node        │   │  OpenClaw Node            │
+│  Ollama :11434        │   │  Ollama :11434            │
+│  - quality-agent      │   │  - devops-agent           │
+│  - security-agent     │   │  - monitoring-agent       │
+│  - codellama:7b       │   │                           │
+└───────────────────────┘   └───────────────────────────┘
 ```
 
 ---
@@ -103,9 +114,9 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 
 ---
 
-## 3.3 Installation on PC1 (Primary Coordinator)
+## 3.3 Installation on PC1 (The Gateway — Control Plane)
 
-PC1 is your primary machine — it runs the Coordinator agent and the Telegram bot channel.
+PC1 is the **only machine that runs the Gateway**. It hosts all agents, the Telegram channel, and connects to remote Ollama instances on PC2 and Laptop. This is the brain of the operation.
 
 ### Step 1: Install OpenClaw
 
@@ -149,7 +160,7 @@ The wizard creates `~/.openclaw/openclaw.json` — this is the **single configur
 
 ### Step 4: Configure Gateway for LAN Access
 
-By default, the Gateway only listens on localhost. For cross-machine communication, set it to bind on LAN:
+By default, the Gateway only listens on localhost. Bind it to LAN so Nodes on PC2 and Laptop can connect:
 
 ```powershell
 openclaw config set gateway.bind "lan"
@@ -165,45 +176,57 @@ Secure the Gateway so only your machines can access it:
 openclaw config set gateway.auth "token"
 ```
 
-Generate a token (save this — you'll need it for PC2 and Laptop):
+Generate a token (save this — you'll need it for PC2 and Laptop Nodes):
 
 ```powershell
 openclaw doctor --generate-gateway-token
 ```
 
-Or set one explicitly via environment variable on all machines:
+Or set one explicitly via environment variable:
 
 ```powershell
 # Add to your PowerShell profile or system environment variables
 [Environment]::SetEnvironmentVariable("OPENCLAW_GATEWAY_TOKEN", "your-secure-token-here", "User")
 ```
 
-### Step 6: Configure Ollama Provider
+### Step 6: Configure Model Providers (Local + Remote Ollama)
 
-Tell OpenClaw where to find your local Ollama instance:
-
-```powershell
-# Set the Ollama API key (enables auto-discovery)
-[Environment]::SetEnvironmentVariable("OLLAMA_API_KEY", "ollama-local", "User")
-```
-
-Or configure explicitly in `openclaw.json`:
+This is the key step for distributed inference. The Gateway on PC1 needs to know about Ollama instances on **all three machines**. Edit `~/.openclaw/openclaw.json`:
 
 ```json5
 {
   models: {
     providers: {
-      ollama: {
+      // PC1's local Ollama (coordinator, senior engineers)
+      "ollama-local": {
         baseUrl: "http://127.0.0.1:11434",  // NO /v1 suffix!
         apiKey: "ollama-local",
-        api: "ollama"  // Use native API for reliable tool calling
+        api: "ollama"
+      },
+      // PC2's remote Ollama (quality agent, security agent)
+      "ollama-pc2": {
+        baseUrl: "http://192.168.1.112:11434",  // NO /v1 suffix!
+        apiKey: "ollama-pc2",
+        api: "ollama"
+      },
+      // Laptop's remote Ollama (devops agent, monitoring agent)
+      "ollama-laptop": {
+        baseUrl: "http://192.168.1.113:11434",  // NO /v1 suffix!
+        apiKey: "ollama-laptop",
+        api: "ollama"
+      },
+      // Claude.ai for External Consultant
+      anthropic: {
+        // API key set via: openclaw models auth paste-token --provider anthropic
       }
     }
   }
 }
 ```
 
-> **Important**: Do NOT add `/v1` to the Ollama URL — this activates OpenAI-compatible mode where tool calling is unreliable with local models.
+> **Important**: Do NOT add `/v1` to any Ollama URL — this activates OpenAI-compatible mode where tool calling is unreliable with local models.
+
+> **Prerequisite**: Ollama must be configured to listen on `0.0.0.0:11434` on PC2 and Laptop (see [Chapter 04, Section 4.3](04-ollama-setup.md#43-configure-ollama-for-network-access)).
 
 ### Step 7: Validate Configuration
 
@@ -231,7 +254,7 @@ openclaw gateway run --bind lan
 # [INFO] Ready.
 ```
 
-> **Tip**: Keep this terminal open for now. We'll set it up as a Windows service in Section 3.6.
+> **Tip**: Keep this terminal open for now. We'll set it up as a Windows service in Section 3.7.
 
 ### Step 9: Open the Control Dashboard
 
@@ -245,7 +268,11 @@ This opens the Control UI in your browser at `http://localhost:18789` where you 
 
 ---
 
-## 3.4 Installation on PC2 (Secondary Agents)
+## 3.4 Installation on PC2 (Node + Ollama Host)
+
+PC2 does **NOT** run its own Gateway. It runs two things:
+1. **Ollama** — serving the quality-agent and security-agent models (the Gateway on PC1 connects to this directly via `http://192.168.1.112:11434`)
+2. **OpenClaw Node** — a lightweight process that connects to PC1's Gateway via WebSocket, providing remote shell execution capabilities
 
 ### Step 1: Install OpenClaw
 
@@ -261,56 +288,71 @@ iwr -useb https://openclaw.ai/install.ps1 | iex
 openclaw --version
 ```
 
-### Step 3: Run First-Time Setup
+### Step 3: Connect as a Node to PC1's Gateway
+
+Instead of running `openclaw onboard` (which sets up a local Gateway), connect to PC1's Gateway as a Node:
 
 ```powershell
-openclaw onboard --install-daemon
-```
-
-When prompted for channels, you can skip them — PC2 agents receive work via webhooks from PC1, not directly from Telegram.
-
-### Step 4: Configure Gateway for LAN Access
-
-```powershell
-openclaw config set gateway.bind "lan"
-```
-
-### Step 5: Set the Same Gateway Token
-
-Use the same token you generated for PC1:
-
-```powershell
+# Set the Gateway token (must match PC1's token)
 [Environment]::SetEnvironmentVariable("OPENCLAW_GATEWAY_TOKEN", "your-secure-token-here", "User")
 ```
 
-### Step 6: Configure Ollama Provider
+> **Node pairing**: When PC2's node first connects, PC1's Gateway creates a **device pairing request**. You must approve the pairing on PC1 via the dashboard or CLI. See Step 5 below.
+
+### Step 4: Start the Node
 
 ```powershell
-[Environment]::SetEnvironmentVariable("OLLAMA_API_KEY", "ollama-local", "User")
+# Connect to PC1's Gateway as a node
+openclaw node connect --gateway ws://192.168.1.106:18789 --token "your-secure-token-here"
 ```
 
-### Step 7: Configure Webhooks for Cross-Machine Communication
+You should see output confirming the WebSocket connection to PC1's Gateway.
 
-Enable the webhook endpoint so PC1's Coordinator can send tasks to agents on PC2:
+> **Alternative**: Use the [OpenClaw Windows Node companion app](https://github.com/openclaw/openclaw-windows-node) for a GUI-based node that runs in the system tray.
+
+### Step 5: Approve the Node on PC1
+
+On PC1, approve the new node pairing:
 
 ```powershell
-openclaw config set hooks.enabled true
-openclaw config set hooks.token "your-webhook-secret-here"
-openclaw config set hooks.path "/hooks"
+# List pending device pairing requests
+openclaw devices list --pending
+
+# Approve PC2's node
+openclaw devices approve <device-id>
 ```
 
-The webhook endpoint will be available at `http://192.168.1.112:18789/hooks/agent`.
+Or approve via the dashboard at `http://localhost:18789`.
 
-### Step 8: Validate and Start
+### Step 6: Verify Ollama is Accessible from PC1
+
+From PC1, test that you can reach PC2's Ollama:
 
 ```powershell
-openclaw doctor --fix
-openclaw gateway run --bind lan
+Invoke-RestMethod -Uri "http://192.168.1.112:11434/api/tags" -Method GET
+```
+
+If this returns a JSON response with the model list, the connection works.
+
+### Step 7: Validate
+
+On PC2, verify the node is connected:
+
+```powershell
+openclaw node status
+```
+
+On PC1, verify PC2 appears as a node:
+
+```powershell
+openclaw devices list
 ```
 
 ---
 
-## 3.5 Installation on Laptop (Monitoring & Light Duties)
+## 3.5 Installation on Laptop (Node + Ollama Host)
+
+The Laptop setup is identical to PC2 — it runs Ollama locally and connects as a Node to PC1's Gateway.
 
 ### Step 1: Install OpenClaw
 
@@ -326,62 +368,63 @@ iwr -useb https://openclaw.ai/install.ps1 | iex
 openclaw --version
 ```
 
-### Step 3: Run First-Time Setup
-
-```powershell
-openclaw onboard --install-daemon
-```
-
-### Step 4: Configure Gateway for LAN Access
-
-```powershell
-openclaw config set gateway.bind "lan"
-```
-
-### Step 5: Set the Same Gateway Token
+### Step 3: Set Gateway Token
 
 ```powershell
 [Environment]::SetEnvironmentVariable("OPENCLAW_GATEWAY_TOKEN", "your-secure-token-here", "User")
 ```
 
-### Step 6: Configure Ollama Provider
+### Step 4: Start the Node
 
 ```powershell
-[Environment]::SetEnvironmentVariable("OLLAMA_API_KEY", "ollama-local", "User")
+openclaw node connect --gateway ws://192.168.1.106:18789 --token "your-secure-token-here"
 ```
 
-### Step 7: Configure Webhooks
+### Step 5: Approve the Node on PC1
+
+On PC1:
 
 ```powershell
-openclaw config set hooks.enabled true
-openclaw config set hooks.token "your-webhook-secret-here"
-openclaw config set hooks.path "/hooks"
+openclaw devices list --pending
+openclaw devices approve <device-id>
 ```
 
-### Step 8: Validate and Start
+### Step 6: Verify Ollama is Accessible from PC1
+
+From PC1:
 
 ```powershell
-openclaw doctor --fix
-openclaw gateway run --bind lan
+Invoke-RestMethod -Uri "http://192.168.1.113:11434/api/tags" -Method GET
+```
+
+### Step 7: Validate
+
+On Laptop:
+
+```powershell
+openclaw node status
+```
+
+On PC1:
+
+```powershell
+openclaw devices list
+# Should show both PC2 and Laptop as connected nodes
 ```
 
 ---
 
 ## 3.6 Verify Cross-Machine Connectivity
 
-Once all three machines are running, verify they can reach each other.
+Once PC1's Gateway is running and PC2/Laptop are connected as Nodes with Ollama running, verify everything works.
 
 ### Step 1: Fix the SSH Path (Required on Windows)
 
-> **Critical:** OpenClaw 2026.3.x hardcodes the SSH binary path as `/usr/bin/ssh` (a Unix path). On Windows this causes `gateway probe` to fail with:
+> **Critical:** OpenClaw 2026.3.x hardcodes the SSH binary path as `/usr/bin/ssh` (a Unix path). On Windows this causes certain commands to fail with:
 > ```
 > [openclaw] Uncaught exception: Error: spawn /usr/bin/ssh ENOENT
 > ```
-> You **must** apply one of the following fixes on **every Windows machine** before `gateway probe` will work.
-
-**Option A — Override the SSH command in config (recommended):**
-
-Tell OpenClaw to resolve SSH from your system PATH instead of hardcoding the Unix path:
+> Apply this fix on **PC1** (the Gateway machine):
 
 ```powershell
 openclaw config set agents.defaults.sandbox.ssh.command "ssh"
@@ -394,99 +437,62 @@ openclaw config get agents.defaults.sandbox.ssh.command
 # Should return: ssh
 ```
 
-**Option B — Set gateway transport to "direct" (skip SSH entirely):**
+### Step 2: Verify Network Connectivity
 
-For trusted LAN environments where SSH tunneling is unnecessary, configure each Gateway's remote transport to bypass SSH:
+From PC1, confirm you can reach the Ollama instances on PC2 and Laptop:
 
 ```powershell
-openclaw config set gateway.remote.transport "direct"
+# Test Ollama on PC2
+Test-NetConnection -ComputerName 192.168.1.112 -Port 11434
+
+# Test Ollama on Laptop
+Test-NetConnection -ComputerName 192.168.1.113 -Port 11434
 ```
 
-**Option C — Use the insecure-private-WebSocket environment variable:**
-
-Set this before running probe commands:
+From PC2 and Laptop, confirm you can reach PC1's Gateway:
 
 ```powershell
-$env:OPENCLAW_ALLOW_INSECURE_PRIVATE_WS = "1"
-openclaw gateway probe --url ws://192.168.1.106:18789
-```
-
-> **Note:** Option A is recommended because it fixes the root cause while keeping SSH-based security intact. Options B and C disable SSH tunneling, which is fine for isolated LANs but reduces security.
-
-### Step 2: Verify Network Connectivity First
-
-Before testing OpenClaw, confirm raw TCP connectivity between all machines:
-
-```powershell
-# From PC1 — test PC2 and Laptop
-Test-NetConnection -ComputerName 192.168.1.112 -Port 18789
-Test-NetConnection -ComputerName 192.168.1.113 -Port 18789
-
-# From PC2 — test PC1 and Laptop
+# Test Gateway on PC1
 Test-NetConnection -ComputerName 192.168.1.106 -Port 18789
-Test-NetConnection -ComputerName 192.168.1.113 -Port 18789
-
-# From Laptop — test PC1 and PC2
-Test-NetConnection -ComputerName 192.168.1.106 -Port 18789
-Test-NetConnection -ComputerName 192.168.1.112 -Port 18789
 ```
 
-All should return `TcpTestSucceeded : True`. If not, check Windows Firewall — see the troubleshooting section below.
+All should return `TcpTestSucceeded : True`.
 
-### Step 3: Test Gateway Connectivity
+### Step 3: Verify Remote Ollama Access
 
-After applying the SSH fix, probe the Gateways:
-
-From PC1, probe the other Gateways:
+From PC1, test that the Gateway can reach remote Ollama instances:
 
 ```powershell
-# Probe PC2's Gateway
-openclaw gateway probe --url http://192.168.1.112:18789
+# Test PC2's Ollama API
+Invoke-RestMethod -Uri "http://192.168.1.112:11434/api/tags" -Method GET
 
-# Probe Laptop's Gateway
-openclaw gateway probe --url http://192.168.1.113:18789
+# Test Laptop's Ollama API
+Invoke-RestMethod -Uri "http://192.168.1.113:11434/api/tags" -Method GET
 ```
 
-From PC2 and Laptop, probe PC1:
+Both should return a JSON response with the models on that machine.
+
+### Step 4: Verify Node Connections
+
+On PC1, check that both Nodes are connected:
 
 ```powershell
-openclaw gateway probe --url http://192.168.1.106:18789
+openclaw devices list
 ```
 
-Expected output on success:
+You should see PC2 and Laptop listed as connected devices.
 
-```
-🦞 OpenClaw 2026.3.x — ...
-✓ Gateway reachable at http://192.168.1.xxx:18789
-✓ WebSocket handshake successful
-✓ Authentication accepted
-```
+### Step 5: Verify Model Providers
 
-### Step 4: Test Webhook Delivery
-
-From PC1, send a test webhook to PC2:
+On PC1, check that all Ollama providers are accessible:
 
 ```powershell
-$bodyContent = @{
-    text = "Hello"
-}
-
-# 2. Convert the PowerShell object to a JSON string
-$jsonBody = $bodyContent | ConvertTo-Json
-
-# 3. Make the API call, ensuring to set the Content-Type header to application/json
-Invoke-RestMethod -Uri "http://192.168.1.113:18789/hooks/wake" -UseBasicParsing `
-  -Method POST `
-  -Headers @{
-      "Authorization" = "Bearer eyhjdf83hdhnd39o83nnd3hd3bi9873dbdb3uhfg";
-      "Content-Type" = "application/json" # This is crucial for JSON bodies
-  } `
-  -Body $jsonBody
+openclaw models status
 ```
 
-You should get an HTTP 200 response. Repeat for each machine pair.
+This should show models from `ollama-local`, `ollama-pc2`, and `ollama-laptop` providers.
 
-### Step 5: Run Diagnostics on All Machines
+### Step 6: Run Diagnostics
 
 ```powershell
 openclaw doctor
@@ -494,27 +500,37 @@ openclaw doctor
 
 ### Troubleshooting Connectivity Issues
 
-If any machine is unreachable, work through this checklist:
-
-| Check | Command | Expected |
-|-------|---------|----------|
+| Check | Command (run on PC1) | Expected |
+|-------|---------------------|----------|
 | Gateway running? | `openclaw gateway status` | Shows "running" with PID |
 | Bound to LAN? | `openclaw config get gateway.bind` | `"lan"` |
-| Ping works? | `ping 192.168.1.xxx` | Reply received |
-| Port open? | `Test-NetConnection -ComputerName 192.168.1.xxx -Port 18789` | `TcpTestSucceeded: True` |
-| SSH path fixed? | `openclaw config get agents.defaults.sandbox.ssh.command` | `"ssh"` (not empty/unset) |
-| SSH on PATH? | `where.exe ssh` | Returns a valid path |
-| Firewall rule? | `Get-NetFirewallRule -DisplayName "*OpenClaw*"` | Rule exists and is enabled |
+| Ping PC2? | `ping 192.168.1.112` | Reply received |
+| Ping Laptop? | `ping 192.168.1.113` | Reply received |
+| PC2 Ollama reachable? | `Test-NetConnection -ComputerName 192.168.1.112 -Port 11434` | `TcpTestSucceeded: True` |
+| Laptop Ollama reachable? | `Test-NetConnection -ComputerName 192.168.1.113 -Port 11434` | `TcpTestSucceeded: True` |
+| Nodes connected? | `openclaw devices list` | PC2 and Laptop listed |
+| SSH path fixed? | `openclaw config get agents.defaults.sandbox.ssh.command` | `"ssh"` |
 
-**If the firewall is blocking port 18789**, create an inbound rule:
+**If Ollama is not reachable on port 11434**, check:
+1. Ollama is running on the remote machine (`ollama list`)
+2. `OLLAMA_HOST` is set to `0.0.0.0:11434` (see [Chapter 04](04-ollama-setup.md#43-configure-ollama-for-network-access))
+3. Firewall allows inbound on port 11434:
 
 ```powershell
+# Run on PC2 and Laptop
+New-NetFirewallRule -DisplayName "Ollama Remote Access" `
+  -Direction Inbound -Protocol TCP -LocalPort 11434 `
+  -Action Allow -Profile Private
+```
+
+**If the Gateway is not reachable on port 18789** (Nodes can't connect):
+
+```powershell
+# Run on PC1
 New-NetFirewallRule -DisplayName "OpenClaw Gateway" `
   -Direction Inbound -Protocol TCP -LocalPort 18789 `
   -Action Allow -Profile Private
 ```
-
-> **Note:** Only allow on `Private` profile. If your network is classified as "Public", either change it to Private (`Set-NetConnectionProfile -InterfaceAlias "Ethernet" -NetworkCategory Private`) or add `-Profile Private,Public` to the rule above.
 
 See [Chapter 17 - Troubleshooting](17-troubleshooting.md) for more
 
@@ -524,7 +540,7 @@ See [Chapter 17 - Troubleshooting](17-troubleshooting.md) for more
 
 So OpenClaw starts automatically on boot and runs in the background.
 
-### On Each Machine — Install the Gateway as a Service
+### On PC1 — Install the Gateway as a Service
 
 If you used `--install-daemon` during onboarding, this is already done. Otherwise:
 
@@ -548,6 +564,27 @@ openclaw gateway uninstall
 ```
 
 > **Note**: On Windows, the service uses `schtasks` (Scheduled Tasks). If admin access is denied, it falls back to a Startup-folder login item. You can verify in Task Scheduler that the "OpenClaw Gateway" task exists.
+
+### On PC2 and Laptop — Auto-Start Node + Ollama
+
+PC2 and Laptop don't run a Gateway — they need Ollama and the Node to start automatically.
+
+**Ollama** already auto-starts as a Windows service after installation.
+
+**For the Node**, create a scheduled task to auto-connect on login:
+
+```powershell
+# Create a startup script
+$script = @'
+openclaw node connect --gateway ws://192.168.1.106:18789 --token "your-secure-token-here"
+'@
+$script | Set-Content -Path "$env:USERPROFILE\openclaw-node-start.ps1"
+
+# Register as a login startup task
+$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-WindowStyle Hidden -File $env:USERPROFILE\openclaw-node-start.ps1"
+$trigger = New-ScheduledTaskTrigger -AtLogOn
+Register-ScheduledTask -TaskName "OpenClaw Node" -Action $action -Trigger $trigger -Description "Connect to OpenClaw Gateway on PC1"
+```
 
 > **After this step**, you can close the terminal running the Gateway in the foreground. The service keeps it running in the background.
 

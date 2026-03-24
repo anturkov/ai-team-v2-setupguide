@@ -53,62 +53,71 @@ The team follows a **hub-and-spoke** model with the Coordinator at the center:
 
 ---
 
-## 6.2 Agent Setup Across Machines
+## 6.2 Agent Setup — All on PC1's Gateway
 
-Each agent is registered on the machine where it runs, inside that machine's `~/.openclaw/openclaw.json`. The full config files are in [configs/](configs/).
+> **Key concept**: ALL agents are registered on **PC1's Gateway**, regardless of which machine runs their model. The Gateway routes each agent's inference requests to the correct Ollama provider (local, PC2, or Laptop) based on the agent's model configuration. PC2 and Laptop do NOT register agents — they only run Ollama and connect as Nodes.
 
-### PC1 Agents (192.168.1.106)
+| Agent ID | Role | Model Provider | Ollama Instance | Workspace (on PC1) |
+|----------|------|----------------|-----------------|---------------------|
+| `coordinator` | Central command, Telegram interface | `ollama-local` | PC1 (127.0.0.1:11434) | `~/.openclaw/workspace-coordinator` |
+| `senior-engineer-1` | Architecture, system design | `ollama-local` | PC1 (127.0.0.1:11434) | `~/.openclaw/workspace-senior-eng-1` |
+| `senior-engineer-2` | Implementation, optimization | `ollama-local` | PC1 (127.0.0.1:11434) | `~/.openclaw/workspace-senior-eng-2` |
+| `quality-agent` | Code review, testing, documentation | `ollama-pc2` | PC2 (192.168.1.112:11434) | `~/.openclaw/workspace-quality` |
+| `security-agent` | Security analysis, vulnerability scanning | `ollama-pc2` | PC2 (192.168.1.112:11434) | `~/.openclaw/workspace-security` |
+| `devops-agent` | Deployment, CI/CD, infrastructure | `ollama-laptop` | Laptop (192.168.1.113:11434) | `~/.openclaw/workspace-devops` |
+| `monitoring-agent` | Resource tracking, performance analysis | `ollama-laptop` | Laptop (192.168.1.113:11434) | `~/.openclaw/workspace-monitoring` |
 
-| Agent ID | Role | Workspace |
-|----------|------|-----------|
-| `coordinator` | Central command, Telegram interface, task delegation | `~/.openclaw/workspace-coordinator` |
-| `senior-engineer-1` | Architecture, system design, complex problems | `~/.openclaw/workspace-senior-eng-1` |
-| `senior-engineer-2` | Implementation, optimization, debugging | `~/.openclaw/workspace-senior-eng-2` |
+### Adding Agents via CLI (all on PC1)
 
-### PC2 Agents (192.168.1.112)
-
-| Agent ID | Role | Workspace |
-|----------|------|-----------|
-| `quality-agent` | Code review, testing, documentation | `~/.openclaw/workspace-quality` |
-| `security-agent` | Security analysis, vulnerability scanning | `~/.openclaw/workspace-security` |
-
-### Laptop Agents (192.168.1.113)
-
-| Agent ID | Role | Workspace |
-|----------|------|-----------|
-| `devops-agent` | Deployment, CI/CD, infrastructure | `~/.openclaw/workspace-devops` |
-| `monitoring-agent` | Resource tracking, performance analysis | `~/.openclaw/workspace-monitoring` |
-
-### Adding Agents via CLI
-
-On each machine, use `openclaw agents add` to create agents:
+Run all of these on **PC1 only**:
 
 ```powershell
-# On PC1:
-openclaw agents add coordinator --workspace "~/.openclaw/workspace-coordinator"
-openclaw agents add senior-engineer-1 --workspace "~/.openclaw/workspace-senior-eng-1"
-openclaw agents add senior-engineer-2 --workspace "~/.openclaw/workspace-senior-eng-2"
-
-# On PC2:
-openclaw agents add quality-agent --workspace "~/.openclaw/workspace-quality"
-openclaw agents add security-agent --workspace "~/.openclaw/workspace-security"
-
-# On Laptop:
-openclaw agents add devops-agent --workspace "~/.openclaw/workspace-devops"
-openclaw agents add monitoring-agent --workspace "~/.openclaw/workspace-monitoring"
+# Register all 7 agents on PC1's Gateway
+openclaw agents add coordinator --workspace "~/.openclaw/workspace-coordinator" --non-interactive
+openclaw agents add senior-engineer-1 --workspace "~/.openclaw/workspace-senior-eng-1" --non-interactive
+openclaw agents add senior-engineer-2 --workspace "~/.openclaw/workspace-senior-eng-2" --non-interactive
+openclaw agents add quality-agent --workspace "~/.openclaw/workspace-quality" --non-interactive
+openclaw agents add security-agent --workspace "~/.openclaw/workspace-security" --non-interactive
+openclaw agents add devops-agent --workspace "~/.openclaw/workspace-devops" --non-interactive
+openclaw agents add monitoring-agent --workspace "~/.openclaw/workspace-monitoring" --non-interactive
 ```
 
-Verify agents on each machine:
+Verify all agents:
 
 ```powershell
 openclaw agents list
 ```
+
+You should see all 7 agents listed, each with its own workspace directory.
+
+### Assigning Models to Agents
+
+Each agent needs to be configured to use the correct model from the correct provider. Use `openclaw agents config` to set the model for each agent:
+
+```powershell
+# PC1 models (ollama-local provider)
+openclaw agents config coordinator --model "coordinator" --provider "ollama-local"
+openclaw agents config senior-engineer-1 --model "senior-engineer-1" --provider "ollama-local"
+openclaw agents config senior-engineer-2 --model "senior-engineer-2" --provider "ollama-local"
+
+# PC2 models (ollama-pc2 provider)
+openclaw agents config quality-agent --model "quality-agent" --provider "ollama-pc2"
+openclaw agents config security-agent --model "security-agent" --provider "ollama-pc2"
+
+# Laptop models (ollama-laptop provider)
+openclaw agents config devops-agent --model "devops-agent" --provider "ollama-laptop"
+openclaw agents config monitoring-agent --model "monitoring-agent" --provider "ollama-laptop"
+```
+
+> **How it works**: When the Coordinator dispatches a task to the quality-agent, the Gateway routes the inference request to `http://192.168.1.112:11434` (PC2's Ollama). The model runs on PC2's GPU, but the agent logic, session state, and workspace all live on PC1.
 
 ---
 
 ## 6.3 Agent Workspaces and SOUL.md
 
 Each agent gets its own workspace directory with personality instructions in `SOUL.md`. This is how you define each agent's role, behavior, and constraints.
+
+> **All workspaces live on PC1** (the Gateway machine). Even agents whose models run on PC2 or Laptop have their workspace on PC1 — the Gateway reads the SOUL.md and passes it as context to the remote Ollama model.
 
 ### 6.3.1 Coordinator SOUL.md
 
@@ -161,7 +170,7 @@ Notify the human via Telegram immediately if:
 
 ### 6.3.2 Quality Agent SOUL.md
 
-Create `~/.openclaw/workspace-quality/SOUL.md` on PC2:
+Create `~/.openclaw/workspace-quality/SOUL.md` on PC1 (model runs on PC2, but workspace is on PC1):
 
 ```markdown
 # Quality Agent
@@ -247,7 +256,7 @@ You are the implementation and optimization specialist of a distributed AI devel
 
 ### 6.3.5 Security Agent SOUL.md
 
-Create `~/.openclaw/workspace-security/SOUL.md` on PC2:
+Create `~/.openclaw/workspace-security/SOUL.md` on PC1 (model runs on PC2):
 
 ```markdown
 # Security Agent
@@ -284,7 +293,7 @@ You are the security specialist of a distributed AI development team.
 
 ### 6.3.6 DevOps Agent SOUL.md
 
-Create `~/.openclaw/workspace-devops/SOUL.md` on Laptop:
+Create `~/.openclaw/workspace-devops/SOUL.md` on PC1 (model runs on Laptop):
 
 ```markdown
 # DevOps Agent
@@ -317,7 +326,7 @@ You are the deployment and infrastructure specialist of a distributed AI develop
 
 ### 6.3.7 Monitoring Agent SOUL.md
 
-Create `~/.openclaw/workspace-monitoring/SOUL.md` on Laptop:
+Create `~/.openclaw/workspace-monitoring/SOUL.md` on PC1 (model runs on Laptop):
 
 ```markdown
 # Monitoring Agent
@@ -358,7 +367,7 @@ You are the resource tracking and performance analysis specialist of a distribut
 
 ## 6.4 Coordinator Dispatch Skill
 
-The Coordinator needs a custom skill to dispatch tasks to remote agents via webhooks. Create this skill in the Coordinator's workspace:
+The Coordinator needs a custom skill to dispatch tasks to other agents on the same Gateway. Since all agents are registered on PC1's Gateway, dispatch uses OpenClaw's native **sub-agent spawning** — no webhooks needed.
 
 ### Create the skill directory and SKILL.md
 
@@ -369,40 +378,45 @@ The Coordinator needs a custom skill to dispatch tasks to remote agents via webh
 ```markdown
 ---
 name: Team Dispatch
-description: Send tasks to remote AI team members via webhook
+description: Send tasks to AI team members via sub-agent sessions
 ---
 
 # Team Dispatch Skill
 
-Use this skill to send tasks to other agents on the team.
+Use this skill to send tasks to other agents on the team. All agents run on the same Gateway — dispatch happens via OpenClaw's native session spawning.
 
 ## Available Agents
 
-| Agent | Machine | Webhook URL |
-|-------|---------|-------------|
-| senior-engineer-1 | PC1 (local) | http://127.0.0.1:18789/hooks/agent |
-| senior-engineer-2 | PC1 (local) | http://127.0.0.1:18789/hooks/agent |
-| quality-agent | PC2 | http://192.168.1.112:18789/hooks/agent |
-| security-agent | PC2 | http://192.168.1.112:18789/hooks/agent |
-| devops-agent | Laptop | http://192.168.1.113:18789/hooks/agent |
-| monitoring-agent | Laptop | http://192.168.1.113:18789/hooks/agent |
+| Agent | Model Location | Specialty |
+|-------|---------------|-----------|
+| senior-engineer-1 | PC1 (local Ollama) | Architecture, system design |
+| senior-engineer-2 | PC1 (local Ollama) | Implementation, optimization |
+| quality-agent | PC2 (remote Ollama) | Code review, testing, documentation |
+| security-agent | PC2 (remote Ollama) | Security analysis, vulnerability scanning |
+| devops-agent | Laptop (remote Ollama) | Deployment, CI/CD, infrastructure |
+| monitoring-agent | Laptop (remote Ollama) | Resource tracking, performance |
 
 ## Dispatching a Task
 
-To send a task, make an HTTP POST to the agent's webhook URL:
+To assign a task to a team member, spawn a sub-agent session:
+- Use `sessions_spawn` to create a new session for the target agent
+- Include the task description, relevant context, and expected deliverables
+- The sub-agent processes the task and returns results to this session
 
-- Set header: `Authorization: Bearer <webhook-token>`
-- Set header: `Content-Type: application/json`
-- Body: `{ "prompt": "<task description>", "agentId": "<agent-id>", "sessionKey": "task:<unique-id>" }`
+## Collecting Results
 
-## Receiving Responses
-
-Remote agents will POST their responses back to:
-`http://192.168.1.106:18789/hooks/agent` with `agentId: "coordinator"`
+Sub-agent results are returned to the Coordinator's session automatically.
+Use `sessions_history` to review previous task results if needed.
 
 ## Broadcasting
 
-To notify all agents, dispatch the same message to each webhook URL sequentially.
+To notify all agents, spawn a session for each agent with the same message.
+
+## Shell Execution on Remote Machines
+
+To run commands on PC2 or Laptop (e.g., check disk space, run tests):
+- Use `openclaw nodes run` to dispatch shell commands to connected Nodes
+- Results are returned to the Coordinator's session
 ```
 
 ---

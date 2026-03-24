@@ -7,8 +7,8 @@ This guide walks you through setting up a **distributed AI development team** ac
 By the end of this guide, you will have:
 
 - Multiple AI models running across 3 machines, each with a specialized role
-- A coordinator model that receives tasks and delegates work to the team
-- Peer-to-peer communication between models via OpenClaw
+- A single OpenClaw Gateway on PC1 orchestrating all agents
+- PC2 and Laptop connected as Nodes to PC1's Gateway
 - A Telegram bot for real-time human interaction and oversight
 - GitHub integration for automated code management
 - Monitoring dashboards to track system health and resource usage
@@ -25,21 +25,38 @@ By the end of this guide, you will have:
                            ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │  PC1 (192.168.1.106) - RTX 4090 24GB / 64GB RAM / 32 cores        │
-│  ┌─────────────────────────────────────────────────────────────┐   │
-│  │  COORDINATOR / DISPATCHER MODEL                              │   │
-│  │  - Receives all tasks via Telegram                           │   │
-│  │  - Decomposes and assigns work                               │   │
-│  │  - Final decision authority                                  │   │
-│  └──────────┬──────────────────────────────┬────────────────────┘   │
-│             │ OpenClaw                     │ OpenClaw                │
-│  ┌──────────▼──────────┐    ┌──────────────▼─────────────┐         │
-│  │  Senior Engineer #1 │    │  Senior Engineer #2         │         │
-│  │  (Architecture)     │    │  (Implementation)           │         │
-│  └─────────────────────┘    └────────────────────────────-┘         │
 │                                                                     │
-│  OpenClaw Gateway (:18789) - Full Admin                              │
+│  ┌───────────────────────────────────────────────────────────────┐  │
+│  │  OpenClaw GATEWAY (:18789) — Single control plane             │  │
+│  │                                                               │  │
+│  │  Agents (all registered here):                                │  │
+│  │  ├── Coordinator (Telegram-bound, task dispatch)              │  │
+│  │  ├── Senior Engineer #1 (Architecture)                        │  │
+│  │  ├── Senior Engineer #2 (Implementation)                      │  │
+│  │  ├── Quality Agent       → model on PC2 Ollama               │  │
+│  │  ├── Security Agent      → model on PC2 Ollama               │  │
+│  │  ├── DevOps Agent        → model on Laptop Ollama            │  │
+│  │  ├── Monitoring Agent    → model on Laptop Ollama            │  │
+│  │  └── External Consultant → Claude.ai API                     │  │
+│  │                                                               │  │
+│  │  Model Providers:                                             │  │
+│  │  ├── ollama-local  (127.0.0.1:11434)     PC1 models          │  │
+│  │  ├── ollama-pc2    (192.168.1.112:11434) PC2 models          │  │
+│  │  ├── ollama-laptop (192.168.1.113:11434) Laptop models       │  │
+│  │  └── anthropic     (api.anthropic.com)   Claude.ai           │  │
+│  │                                                               │  │
+│  │  Channels: Telegram Bot                                       │  │
+│  └──────────┬────────────────────────────────┬───────────────────┘  │
+│             │ WebSocket                      │ WebSocket            │
+│  ┌──────────▼──────────┐    ┌────────────────▼───────────────┐     │
+│  │  Local Ollama       │    │  Node connections               │     │
+│  │  :11434             │    │  (PC2 + Laptop connect here)    │     │
+│  │  - coordinator      │    └────────────────────────────────-┘     │
+│  │  - senior-eng-1     │                                            │
+│  │  - senior-eng-2     │                                            │
+│  └─────────────────────┘                                            │
 └──────────┬──────────────────────────────┬───────────────────────────┘
-           │ Webhooks via OpenClaw        │
+           │ Node (WebSocket)             │ Node (WebSocket)
            ▼                              ▼
 ┌────────────────────────────┐  ┌──────────────────────────────────┐
 │  PC2 (192.168.1.112)       │  │  Laptop (192.168.1.113)          │
@@ -47,18 +64,20 @@ By the end of this guide, you will have:
 │  64GB RAM / 24 cores       │  │  64GB RAM / 12 cores             │
 │                            │  │                                  │
 │  ┌──────────────────────┐  │  │  ┌────────────────────────────┐  │
-│  │  Quality Agent       │  │  │  │  DevOps Agent              │  │
-│  │  (Review/Testing)    │  │  │  │  (Deploy/Infrastructure)   │  │
-│  ├──────────────────────┤  │  │  ├────────────────────────────┤  │
-│  │  Security Agent      │  │  │  │  Monitoring Agent          │  │
-│  │  (Security Analysis) │  │  │  │  (Resource Tracking)       │  │
-│  ├──────────────────────┤  │  │  └────────────────────────────┘  │
-│  │  Senior Eng #1 or #2 │  │  │                                  │
-│  │  (Overflow/Backup)   │  │  │  OpenClaw Gateway (:18789)      │
+│  │  OpenClaw NODE       │  │  │  │  OpenClaw NODE             │  │
+│  │  (connects to PC1    │  │  │  │  (connects to PC1          │  │
+│  │   Gateway via WS)    │  │  │  │   Gateway via WS)          │  │
+│  └──────────────────────┘  │  │  └────────────────────────────┘  │
+│                            │  │                                  │
+│  ┌──────────────────────┐  │  │  ┌────────────────────────────┐  │
+│  │  Ollama :11434       │  │  │  │  Ollama :11434             │  │
+│  │  - quality-agent     │  │  │  │  - devops-agent            │  │
+│  │  - security-agent    │  │  │  │  - monitoring-agent        │  │
+│  │  - codellama:7b      │  │  │  └────────────────────────────┘  │
 │  └──────────────────────┘  │  └──────────────────────────────────┘
-│                            │
-│  OpenClaw Gateway (:18789)│       ┌─────────────────────────┐
-└────────────────────────────┘       │  External: Claude.ai    │
+└────────────────────────────┘
+                                     ┌─────────────────────────┐
+                                     │  External: Claude.ai    │
                                      │  (via Anthropic API)    │
                                      │  Role: Consultant       │
                                      └─────────────────────────┘
@@ -66,11 +85,12 @@ By the end of this guide, you will have:
 
 ## Key Design Principles
 
-1. **No Monolithic Controller** - There is no single Python script routing everything. Each AI model is an independent agent.
-2. **OpenClaw is the Infrastructure** - All inter-model communication, file management, GitHub operations, and Telegram integration go through OpenClaw natively.
-3. **Peer-to-Peer via OpenClaw** - Models communicate directly with each other through OpenClaw's webhook system between independent Gateways.
-4. **Human Oversight** - The Telegram bot ensures a human is always in the loop for critical decisions.
-5. **Fault Tolerant** - If one model goes down, the system degrades gracefully and the coordinator reassigns work.
+1. **No Monolithic Controller** — There is no single Python script routing everything. Each AI model is an independent agent orchestrated by OpenClaw.
+2. **Hub-and-Spoke Architecture** — PC1 runs the single OpenClaw Gateway (hub). PC2 and Laptop connect as Nodes (spokes) via WebSocket. All agents are registered on the Gateway.
+3. **OpenClaw is the Infrastructure** — All agent orchestration, channel routing, file management, GitHub operations, and Telegram integration go through OpenClaw natively.
+4. **Remote Ollama as Providers** — The Gateway on PC1 connects to Ollama instances on PC2 and Laptop via their HTTP API (port 11434). Models run on the hardware where they're deployed; the Gateway routes inference requests to the right provider.
+5. **Human Oversight** — The Telegram bot ensures a human is always in the loop for critical decisions.
+6. **Fault Tolerant** — If a node or remote Ollama goes down, the Gateway detects the failure and the coordinator reassigns work.
 
 ## Guide Structure
 
