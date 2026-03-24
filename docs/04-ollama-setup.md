@@ -261,7 +261,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:11434/api/generate" -Method POST -Body 
 
 Each agent needs a custom system prompt that defines its role. We create these using Ollama's Modelfile format.
 
-> **Detailed system prompts for each agent are in [Chapter 06 - Team Configuration](06-team-configuration.md)**. Here we show the mechanism.
+> **All Modelfiles for every agent are in the [`models/`](../models/) directory at the root of this repository.** Detailed system prompts and parameters for each role are also documented inline in [Chapter 05 - Model Deployment](05-model-deployment.md). Here we show the mechanism.
 
 ### Example: Creating the Coordinator Model
 
@@ -307,7 +307,19 @@ ollama list
 # Should now show "coordinator" in the list
 ```
 
-> **Repeat this process for each agent** using the role-specific Modelfiles from [Chapter 06](06-team-configuration.md).
+> **Repeat this process for each agent** using the Modelfiles from the [`models/`](../models/) directory. All seven Modelfiles are provided:
+>
+> | Modelfile | Agent | Machine |
+> |-----------|-------|---------|
+> | `Modelfile-coordinator` | Coordinator / Dispatcher | PC1 |
+> | `Modelfile-senior-eng-1` | Senior Engineer #1 (Architecture) | PC1 |
+> | `Modelfile-senior-eng-2` | Senior Engineer #2 (Implementation) | PC1 |
+> | `Modelfile-quality-agent` | Quality Agent | PC2 |
+> | `Modelfile-security-agent` | Security Agent | PC2 |
+> | `Modelfile-devops-agent` | DevOps Agent | Laptop |
+> | `Modelfile-monitoring-agent` | Monitoring Agent | Laptop |
+>
+> Copy each Modelfile to `C:\AI-Team\models\` on the target machine and run `ollama create <name> -f <Modelfile>`. See [Chapter 05](05-model-deployment.md) for the full build commands.
 
 ---
 
