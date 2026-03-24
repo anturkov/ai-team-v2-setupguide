@@ -76,6 +76,23 @@ Verify:
 git --version
 ```
 
+### OpenSSH Client
+
+OpenClaw's `gateway probe` command uses SSH internally. Windows 11 ships with OpenSSH, but it must be on your PATH. Verify:
+
+```powershell
+where.exe ssh
+# Expected: C:\Windows\System32\OpenSSH\ssh.exe
+```
+
+If `where.exe ssh` returns nothing, enable the OpenSSH Client feature:
+
+```powershell
+Add-WindowsCapability -Online -Name OpenSSH.Client~~~~0.0.1.0
+```
+
+> **Known Issue (OpenClaw 2026.3.x):** OpenClaw hardcodes the SSH path as `/usr/bin/ssh` (Unix). Even if SSH is installed, `gateway probe` will fail with `spawn /usr/bin/ssh ENOENT`. See [Section 3.6](#36-verify-cross-machine-connectivity) for the required workaround.
+
 ### PowerShell Execution Policy
 
 Allow script execution (needed for the installer):
@@ -354,7 +371,71 @@ openclaw gateway run --bind lan
 
 Once all three machines are running, verify they can reach each other.
 
-### Test Gateway Connectivity
+### Step 1: Fix the SSH Path (Required on Windows)
+
+> **Critical:** OpenClaw 2026.3.x hardcodes the SSH binary path as `/usr/bin/ssh` (a Unix path). On Windows this causes `gateway probe` to fail with:
+> ```
+> [openclaw] Uncaught exception: Error: spawn /usr/bin/ssh ENOENT
+> ```
+> You **must** apply one of the following fixes on **every Windows machine** before `gateway probe` will work.
+
+**Option A — Override the SSH command in config (recommended):**
+
+Tell OpenClaw to resolve SSH from your system PATH instead of hardcoding the Unix path:
+
+```powershell
+openclaw config set agents.defaults.sandbox.ssh.command "ssh"
+```
+
+Verify:
+
+```powershell
+openclaw config get agents.defaults.sandbox.ssh.command
+# Should return: ssh
+```
+
+**Option B — Set gateway transport to "direct" (skip SSH entirely):**
+
+For trusted LAN environments where SSH tunneling is unnecessary, configure each Gateway's remote transport to bypass SSH:
+
+```powershell
+openclaw config set gateway.remote.transport "direct"
+```
+
+**Option C — Use the insecure-private-WebSocket environment variable:**
+
+Set this before running probe commands:
+
+```powershell
+$env:OPENCLAW_ALLOW_INSECURE_PRIVATE_WS = "1"
+openclaw gateway probe --url ws://192.168.1.106:18789
+```
+
+> **Note:** Option A is recommended because it fixes the root cause while keeping SSH-based security intact. Options B and C disable SSH tunneling, which is fine for isolated LANs but reduces security.
+
+### Step 2: Verify Network Connectivity First
+
+Before testing OpenClaw, confirm raw TCP connectivity between all machines:
+
+```powershell
+# From PC1 — test PC2 and Laptop
+Test-NetConnection -ComputerName 192.168.1.112 -Port 18789
+Test-NetConnection -ComputerName 192.168.1.113 -Port 18789
+
+# From PC2 — test PC1 and Laptop
+Test-NetConnection -ComputerName 192.168.1.106 -Port 18789
+Test-NetConnection -ComputerName 192.168.1.113 -Port 18789
+
+# From Laptop — test PC1 and PC2
+Test-NetConnection -ComputerName 192.168.1.106 -Port 18789
+Test-NetConnection -ComputerName 192.168.1.112 -Port 18789
+```
+
+All should return `TcpTestSucceeded : True`. If not, check Windows Firewall — see the troubleshooting section below.
+
+### Step 3: Test Gateway Connectivity
+
+After applying the SSH fix, probe the Gateways:
 
 From PC1, probe the other Gateways:
 
@@ -372,31 +453,58 @@ From PC2 and Laptop, probe PC1:
 openclaw gateway probe --url http://192.168.1.106:18789
 ```
 
-### Test Webhook Delivery
+Expected output on success:
+
+```
+🦞 OpenClaw 2026.3.x — ...
+✓ Gateway reachable at http://192.168.1.xxx:18789
+✓ WebSocket handshake successful
+✓ Authentication accepted
+```
+
+### Step 4: Test Webhook Delivery
 
 From PC1, send a test webhook to PC2:
 
 ```powershell
-# Use curl or Invoke-WebRequest to hit the webhook endpoint
 Invoke-RestMethod -Uri "http://192.168.1.112:18789/hooks/wake" `
   -Method POST `
   -Headers @{ "Authorization" = "Bearer your-webhook-secret-here" }
 ```
 
-You should get an HTTP 200 response.
+You should get an HTTP 200 response. Repeat for each machine pair.
 
-### Run Diagnostics on All Machines
+### Step 5: Run Diagnostics on All Machines
 
 ```powershell
 openclaw doctor
 ```
 
-If any machine is unreachable, check:
-1. Is the Gateway running? (`openclaw gateway status`)
-2. Is it bound to LAN? (`openclaw config get gateway.bind` — should be `"lan"`)
-3. Can you ping the machine? (`ping 192.168.1.112`)
-4. Is the port open? (`Test-NetConnection -ComputerName 192.168.1.112 -Port 18789`)
-5. See [Chapter 17 - Troubleshooting](17-troubleshooting.md) for more
+### Troubleshooting Connectivity Issues
+
+If any machine is unreachable, work through this checklist:
+
+| Check | Command | Expected |
+|-------|---------|----------|
+| Gateway running? | `openclaw gateway status` | Shows "running" with PID |
+| Bound to LAN? | `openclaw config get gateway.bind` | `"lan"` |
+| Ping works? | `ping 192.168.1.xxx` | Reply received |
+| Port open? | `Test-NetConnection -ComputerName 192.168.1.xxx -Port 18789` | `TcpTestSucceeded: True` |
+| SSH path fixed? | `openclaw config get agents.defaults.sandbox.ssh.command` | `"ssh"` (not empty/unset) |
+| SSH on PATH? | `where.exe ssh` | Returns a valid path |
+| Firewall rule? | `Get-NetFirewallRule -DisplayName "*OpenClaw*"` | Rule exists and is enabled |
+
+**If the firewall is blocking port 18789**, create an inbound rule:
+
+```powershell
+New-NetFirewallRule -DisplayName "OpenClaw Gateway" `
+  -Direction Inbound -Protocol TCP -LocalPort 18789 `
+  -Action Allow -Profile Private
+```
+
+> **Note:** Only allow on `Private` profile. If your network is classified as "Public", either change it to Private (`Set-NetConnectionProfile -InterfaceAlias "Ethernet" -NetworkCategory Private`) or add `-Profile Private,Public` to the rule above.
+
+See [Chapter 17 - Troubleshooting](17-troubleshooting.md) for more
 
 ---
 
