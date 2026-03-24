@@ -191,42 +191,39 @@ Or set one explicitly via environment variable:
 
 ### Step 6: Configure Model Providers (Local + Remote Ollama)
 
-This is the key step for distributed inference. The Gateway on PC1 needs to know about Ollama instances on **all three machines**. Edit `~/.openclaw/openclaw.json`:
+This is the key step for distributed inference. The onboarding wizard creates a default `ollama` provider pointing to your local Ollama. You need to add providers for PC2 and Laptop too.
 
-```json5
-{
-  models: {
-    providers: {
-      // PC1's local Ollama (coordinator, senior engineers)
-      "ollama-local": {
-        baseUrl: "http://127.0.0.1:11434",  // NO /v1 suffix!
-        apiKey: "ollama-local",
-        api: "ollama"
-      },
-      // PC2's remote Ollama (quality agent, security agent)
-      "ollama-pc2": {
-        baseUrl: "http://192.168.1.112:11434",  // NO /v1 suffix!
-        apiKey: "ollama-pc2",
-        api: "ollama"
-      },
-      // Laptop's remote Ollama (devops agent, monitoring agent)
-      "ollama-laptop": {
-        baseUrl: "http://192.168.1.113:11434",  // NO /v1 suffix!
-        apiKey: "ollama-laptop",
-        api: "ollama"
-      },
-      // Claude.ai for External Consultant
-      anthropic: {
-        // API key set via: openclaw models auth paste-token --provider anthropic
-      }
-    }
-  }
-}
+```powershell
+# Verify the default 'ollama' provider points to PC1's local Ollama
+openclaw config get models.providers.ollama.baseUrl
+# Should return: http://127.0.0.1:11434
+# If it returns a remote IP, fix it:
+openclaw config set models.providers.ollama.baseUrl "http://127.0.0.1:11434"
+
+# Add PC2's Ollama as a named provider
+openclaw config set models.providers.ollama-pc2.baseUrl "http://192.168.1.112:11434"
+openclaw config set models.providers.ollama-pc2.apiKey "ollama-local"
+openclaw config set models.providers.ollama-pc2.api "ollama"
+
+# Add Laptop's Ollama as a named provider
+openclaw config set models.providers.ollama-laptop.baseUrl "http://192.168.1.113:11434"
+openclaw config set models.providers.ollama-laptop.apiKey "ollama-local"
+openclaw config set models.providers.ollama-laptop.api "ollama"
 ```
+
+After this, your `models.providers` in `openclaw.json` should have three providers:
+
+| Provider | Base URL | Machine | Models |
+|----------|----------|---------|--------|
+| `ollama` | `http://127.0.0.1:11434` | PC1 (local) | coordinator, senior-eng-1, senior-eng-2 |
+| `ollama-pc2` | `http://192.168.1.112:11434` | PC2 | quality-agent, security-agent, codellama:7b |
+| `ollama-laptop` | `http://192.168.1.113:11434` | Laptop | devops-agent, monitoring-agent |
 
 > **Important**: Do NOT add `/v1` to any Ollama URL — this activates OpenAI-compatible mode where tool calling is unreliable with local models.
 
 > **Prerequisite**: Ollama must be configured to listen on `0.0.0.0:11434` on PC2 and Laptop (see [Chapter 04, Section 4.3](04-ollama-setup.md#43-configure-ollama-for-network-access)).
+
+> **See** [`docs/current_config/claude_openclaw_pc1.json`](current_config/claude_openclaw_pc1.json) for the complete corrected config file.
 
 ### Step 7: Validate Configuration
 

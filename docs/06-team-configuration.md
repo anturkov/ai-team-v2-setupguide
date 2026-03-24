@@ -92,24 +92,135 @@ You should see all 7 agents listed, each with its own workspace directory.
 
 ### Assigning Models to Agents
 
-Each agent needs to be configured to use the correct model from the correct provider. Use `openclaw agents config` to set the model for each agent:
+> **Important**: There is **no CLI command** to assign a model to a specific agent. The command `openclaw agents config --model` does not exist ([Issue #37082](https://github.com/openclaw/openclaw/issues/37082)). Per-agent model assignment is done by **editing `openclaw.json` directly**.
 
-```powershell
-# PC1 models (ollama-local provider)
-openclaw agents config coordinator --model "coordinator" --provider "ollama-local"
-openclaw agents config senior-engineer-1 --model "senior-engineer-1" --provider "ollama-local"
-openclaw agents config senior-engineer-2 --model "senior-engineer-2" --provider "ollama-local"
+The model identifier format is `<provider-name>/<model-id>`, matching the output of `openclaw models list`. For example: `ollama-pc2/quality-agent:latest`.
 
-# PC2 models (ollama-pc2 provider)
-openclaw agents config quality-agent --model "quality-agent" --provider "ollama-pc2"
-openclaw agents config security-agent --model "security-agent" --provider "ollama-pc2"
+**Edit `~/.openclaw/openclaw.json` on PC1.** In the `agents.list` array, add a `model` object with a `primary` field to each agent:
 
-# Laptop models (ollama-laptop provider)
-openclaw agents config devops-agent --model "devops-agent" --provider "ollama-laptop"
-openclaw agents config monitoring-agent --model "monitoring-agent" --provider "ollama-laptop"
+```json
+{
+  "agents": {
+    "list": [
+      {
+        "id": "coordinator",
+        "default": true,
+        "workspace": "C:\\Users\\atuadm\\.openclaw\\workspace-coordinator"
+        // No model field needed — the coordinator inherits agents.defaults.model.primary
+      },
+      {
+        "id": "senior-engineer-1",
+        "workspace": "C:\\Users\\atuadm\\.openclaw\\workspace-senior-eng-1",
+        "model": {
+          "primary": "ollama/senior-eng-1:latest"
+        }
+      },
+      {
+        "id": "senior-engineer-2",
+        "workspace": "C:\\Users\\atuadm\\.openclaw\\workspace-senior-eng-2",
+        "model": {
+          "primary": "ollama/senior-eng-2:latest"
+        }
+      },
+      {
+        "id": "quality-agent",
+        "workspace": "C:\\Users\\atuadm\\.openclaw\\workspace-quality",
+        "model": {
+          "primary": "ollama-pc2/quality-agent:latest"
+        }
+      },
+      {
+        "id": "security-agent",
+        "workspace": "C:\\Users\\atuadm\\.openclaw\\workspace-security",
+        "model": {
+          "primary": "ollama-pc2/security-agent:latest"
+        }
+      },
+      {
+        "id": "devops-agent",
+        "workspace": "C:\\Users\\atuadm\\.openclaw\\workspace-devops",
+        "model": {
+          "primary": "ollama-laptop/devops-agent:latest"
+        }
+      },
+      {
+        "id": "monitoring-agent",
+        "workspace": "C:\\Users\\atuadm\\.openclaw\\workspace-monitoring",
+        "model": {
+          "primary": "ollama-laptop/monitoring-agent:latest"
+        }
+      }
+    ]
+  }
+}
 ```
 
-> **How it works**: When the Coordinator dispatches a task to the quality-agent, the Gateway routes the inference request to `http://192.168.1.112:11434` (PC2's Ollama). The model runs on PC2's GPU, but the agent logic, session state, and workspace all live on PC1.
+> **Model format**: The format is `<provider>/<model-id>`. Match the values from `openclaw models list` output exactly (e.g., `ollama-pc2/quality-agent:latest`, not just `quality-agent`).
+
+> **See [`docs/current_config/claude_openclaw_pc1.json`](current_config/claude_openclaw_pc1.json)** for the complete corrected config file with all changes annotated.
+
+### The Default Model and Fallback Chain
+
+The `agents.defaults.model` section controls what happens when an agent doesn't have a per-agent model, or when its primary model is unavailable:
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "ollama/coordinator:latest",
+        "fallbacks": [
+          "ollama/senior-eng-1:latest",
+          "ollama/senior-eng-2:latest",
+          "ollama-pc2/quality-agent:latest",
+          "ollama-pc2/security-agent:latest",
+          "ollama-laptop/devops-agent:latest",
+          "ollama-laptop/monitoring-agent:latest",
+          "ollama-pc2/codellama:7b-instruct-q4_K_M"
+        ]
+      }
+    }
+  }
+}
+```
+
+- `primary`: The default model for any agent without a per-agent override (the coordinator, since it's the `default` agent)
+- `fallbacks`: Models tried in order if an agent's primary is unavailable
+
+### Critical Fix: Verify Your Default Ollama Provider URL
+
+> **⚠️ Check this now:** The onboarding wizard may have auto-discovered a remote Ollama instance and set it as the default `ollama` provider. Verify:
+>
+> ```powershell
+> openclaw config get models.providers.ollama.baseUrl
+> ```
+>
+> If this returns a remote IP (like `http://192.168.1.112:11434`) instead of `http://127.0.0.1:11434`, your PC1 local models are being served from the wrong machine! Fix it:
+>
+> ```powershell
+> openclaw config set models.providers.ollama.baseUrl "http://127.0.0.1:11434"
+> ```
+
+### After Editing: Restart the Gateway
+
+After any config changes, restart the Gateway to pick them up:
+
+```powershell
+openclaw gateway restart
+openclaw doctor --fix
+```
+
+Verify agents now show their assigned models:
+
+```powershell
+openclaw agents list
+```
+
+Agents should show `(explicit)` next to their model if the per-agent override is working, or `(inherited)` if using the default.
+
+> **Known Bug ([#29571](https://github.com/openclaw/openclaw/issues/29571))**: `agents.defaults.model.primary` may override per-agent model config at runtime. If agents aren't using their assigned model, check the fallback chain. Workaround: set the most-used agent's model as the global default.
+
+> **How it works**: When the Coordinator dispatches a task to the quality-agent, the Gateway sees its model is `ollama-pc2/quality-agent:latest`, and routes the inference request to `http://192.168.1.112:11434` (PC2's Ollama). The model runs on PC2's GPU, but the agent logic, session state, and workspace all live on PC1.
 
 ---
 

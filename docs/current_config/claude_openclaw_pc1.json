@@ -1,0 +1,213 @@
+{
+  "meta": {
+    "lastTouchedVersion": "2026.3.23-2",
+    "lastTouchedAt": "2026-03-24T21:22:03.029Z"
+  },
+  "wizard": {
+    "lastRunAt": "2026-03-24T20:52:40.580Z",
+    "lastRunVersion": "2026.3.23-2",
+    "lastRunCommand": "configure",
+    "lastRunMode": "local"
+  },
+  "auth": {
+    "profiles": {
+      "ollama:default": {
+        "provider": "ollama",
+        "mode": "api_key"
+      }
+    }
+  },
+  "models": {
+    "mode": "merge",
+    "providers": {
+      "ollama": {
+        "_comment": "FIXED: Was pointing to PC2 (192.168.1.112). Now points to PC1 local Ollama.",
+        "baseUrl": "http://127.0.0.1:11434",
+        "apiKey": "OLLAMA_API_KEY",
+        "api": "ollama"
+      },
+      "ollama-pc2": {
+        "baseUrl": "http://192.168.1.112:11434",
+        "apiKey": "ollama-local",
+        "api": "ollama"
+      },
+      "ollama-laptop": {
+        "baseUrl": "http://192.168.1.113:11434",
+        "apiKey": "ollama-local",
+        "api": "ollama"
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": {
+        "_comment": "The coordinator is the default agent and most-used, so it gets the default primary.",
+        "primary": "ollama/coordinator:latest",
+        "fallbacks": [
+          "ollama/senior-eng-1:latest",
+          "ollama/senior-eng-2:latest",
+          "ollama-pc2/quality-agent:latest",
+          "ollama-pc2/security-agent:latest",
+          "ollama-laptop/devops-agent:latest",
+          "ollama-laptop/monitoring-agent:latest",
+          "ollama-pc2/codellama:7b-instruct-q4_K_M"
+        ]
+      },
+      "models": {
+        "_comment": "Allowlist: all models that agents are permitted to use. Format: provider/model-id",
+        "ollama/coordinator:latest": {},
+        "ollama/senior-eng-1:latest": {},
+        "ollama/senior-eng-2:latest": {},
+        "ollama-pc2/quality-agent:latest": {},
+        "ollama-pc2/security-agent:latest": {},
+        "ollama-pc2/codellama:7b-instruct-q4_K_M": {},
+        "ollama-laptop/devops-agent:latest": {},
+        "ollama-laptop/monitoring-agent:latest": {}
+      },
+      "workspace": "~/.openclaw/workspace",
+      "timeoutSeconds": 600,
+      "maxConcurrent": 2
+    },
+    "list": [
+      {
+        "id": "coordinator",
+        "default": true,
+        "workspace": "C:\\Users\\atuadm\\.openclaw\\workspace-coordinator",
+        "_comment": "No per-agent model needed — inherits agents.defaults.model.primary (ollama/coordinator:latest)"
+      },
+      {
+        "id": "senior-engineer-1",
+        "workspace": "C:\\Users\\atuadm\\.openclaw\\workspace-senior-eng-1",
+        "model": {
+          "primary": "ollama/senior-eng-1:latest"
+        }
+      },
+      {
+        "id": "senior-engineer-2",
+        "workspace": "C:\\Users\\atuadm\\.openclaw\\workspace-senior-eng-2",
+        "model": {
+          "primary": "ollama/senior-eng-2:latest"
+        }
+      },
+      {
+        "id": "quality-agent",
+        "name": "quality-agent",
+        "workspace": "C:\\Users\\atuadm\\.openclaw\\workspace-quality",
+        "agentDir": "C:\\Users\\atuadm\\.openclaw\\agents\\quality-agent\\agent",
+        "model": {
+          "primary": "ollama-pc2/quality-agent:latest"
+        }
+      },
+      {
+        "id": "security-agent",
+        "name": "security-agent",
+        "workspace": "C:\\Users\\atuadm\\.openclaw\\workspace-security",
+        "agentDir": "C:\\Users\\atuadm\\.openclaw\\agents\\security-agent\\agent",
+        "model": {
+          "primary": "ollama-pc2/security-agent:latest"
+        }
+      },
+      {
+        "id": "devops-agent",
+        "name": "devops-agent",
+        "workspace": "C:\\Users\\atuadm\\.openclaw\\workspace-devops",
+        "agentDir": "C:\\Users\\atuadm\\.openclaw\\agents\\devops-agent\\agent",
+        "model": {
+          "primary": "ollama-laptop/devops-agent:latest"
+        }
+      },
+      {
+        "id": "monitoring-agent",
+        "name": "monitoring-agent",
+        "workspace": "C:\\Users\\atuadm\\.openclaw\\workspace-monitoring",
+        "agentDir": "C:\\Users\\atuadm\\.openclaw\\agents\\monitoring-agent\\agent",
+        "model": {
+          "primary": "ollama-laptop/monitoring-agent:latest"
+        }
+      }
+    ]
+  },
+  "tools": {
+    "profile": "coding"
+  },
+  "commands": {
+    "native": "auto",
+    "nativeSkills": "auto",
+    "restart": true,
+    "ownerDisplay": "raw"
+  },
+  "session": {
+    "dmScope": "per-channel-peer"
+  },
+  "hooks": {
+    "enabled": true,
+    "path": "/hooks",
+    "token": "eyhjdf83hdhnd39o83nnd3hd3bi9873dbdb3uhfg",
+    "internal": {
+      "enabled": true,
+      "entries": {
+        "boot-md": {
+          "enabled": true
+        },
+        "bootstrap-extra-files": {
+          "enabled": true
+        },
+        "command-logger": {
+          "enabled": true
+        },
+        "session-memory": {
+          "enabled": true
+        }
+      }
+    }
+  },
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "dmPolicy": "pairing",
+      "botToken": "8769842428:AAG89sh5-oM2XdX9OMzwsFvTVmnSK-PCYRE",
+      "groups": {
+        "*": {
+          "requireMention": true
+        }
+      },
+      "groupPolicy": "allowlist",
+      "streaming": "partial"
+    }
+  },
+  "gateway": {
+    "port": 18789,
+    "mode": "local",
+    "bind": "lan",
+    "controlUi": {
+      "allowedOrigins": [
+        "http://localhost:18789",
+        "http://127.0.0.1:18789",
+        "http://192.168.1.106:18789",
+        "http://0.0.0.0:18789"
+      ]
+    },
+    "auth": {
+      "mode": "token",
+      "token": "18796e9e3998b4ba92cf5db7871363fc853f3158e9a6e1a0"
+    },
+    "tailscale": {
+      "mode": "off",
+      "resetOnExit": false
+    },
+    "remote": {
+      "transport": "direct"
+    },
+    "nodes": {
+      "denyCommands": [
+        "camera.snap",
+        "camera.clip",
+        "screen.record",
+        "contacts.add",
+        "calendar.add",
+        "reminders.add",
+        "sms.send"
+      ]
+    }
+  }
+}

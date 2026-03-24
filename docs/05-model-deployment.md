@@ -429,31 +429,52 @@ You should see the custom model names alongside the base models.
 
 All configuration happens **on PC1 only** (the Gateway). PC2 and Laptop just run Ollama — they don't need any OpenClaw model configuration.
 
-### Step 1: Configure Remote Ollama Providers
+### Step 1: Configure Ollama Providers
 
-If you haven't already done this in [Chapter 03](03-openclaw-installation.md), edit `~/.openclaw/openclaw.json` on PC1:
+During `openclaw onboard`, the wizard auto-discovers Ollama instances and creates providers. You need **three providers** — one per machine. Add the remote providers via CLI:
 
-```json5
+```powershell
+# Add PC2's Ollama as a provider
+openclaw config set models.providers.ollama-pc2.baseUrl "http://192.168.1.112:11434"
+openclaw config set models.providers.ollama-pc2.apiKey "ollama-local"
+openclaw config set models.providers.ollama-pc2.api "ollama"
+
+# Add Laptop's Ollama as a provider
+openclaw config set models.providers.ollama-laptop.baseUrl "http://192.168.1.113:11434"
+openclaw config set models.providers.ollama-laptop.apiKey "ollama-local"
+openclaw config set models.providers.ollama-laptop.api "ollama"
+```
+
+> **⚠️ Critical: Verify the default `ollama` provider points to PC1 localhost!**
+> The onboarding wizard may have auto-discovered a remote Ollama and set it as the default. Check:
+> ```powershell
+> openclaw config get models.providers.ollama.baseUrl
+> ```
+> If it returns a remote IP (e.g., `http://192.168.1.112:11434`), fix it:
+> ```powershell
+> openclaw config set models.providers.ollama.baseUrl "http://127.0.0.1:11434"
+> ```
+
+After configuration, your `models.providers` section in `openclaw.json` should look like:
+
+```json
 {
-  models: {
-    providers: {
-      // PC1's local Ollama — coordinator and senior engineers
-      "ollama-local": {
-        baseUrl: "http://127.0.0.1:11434",
-        apiKey: "ollama-local",
-        api: "ollama"
+  "models": {
+    "providers": {
+      "ollama": {
+        "baseUrl": "http://127.0.0.1:11434",
+        "apiKey": "OLLAMA_API_KEY",
+        "api": "ollama"
       },
-      // PC2's remote Ollama — quality and security agents
       "ollama-pc2": {
-        baseUrl: "http://192.168.1.112:11434",
-        apiKey: "ollama-pc2",
-        api: "ollama"
+        "baseUrl": "http://192.168.1.112:11434",
+        "apiKey": "ollama-local",
+        "api": "ollama"
       },
-      // Laptop's remote Ollama — devops and monitoring agents
       "ollama-laptop": {
-        baseUrl: "http://192.168.1.113:11434",
-        apiKey: "ollama-laptop",
-        api: "ollama"
+        "baseUrl": "http://192.168.1.113:11434",
+        "apiKey": "ollama-local",
+        "api": "ollama"
       }
     }
   }
@@ -462,44 +483,50 @@ If you haven't already done this in [Chapter 03](03-openclaw-installation.md), e
 
 > **Important**: Do NOT add `/v1` to Ollama URLs. The `/v1` suffix activates OpenAI-compatible mode, which breaks tool calling with local models.
 
+> **Note**: OpenClaw auto-populates a `models` array inside each provider with discovered model metadata (id, contextWindow, cost, etc.). This is normal — it's the auto-discovery cache. You don't need to manage it manually.
+
 ### Step 2: Add Models to the Allowlist
 
-Each agent needs its model added to the allowlist. In `openclaw.json` on PC1:
+The allowlist controls which models agents are permitted to use. The format is `<provider>/<model-id>` — matching the output of `openclaw models list`.
 
-```json5
+In `openclaw.json` on PC1, set the `agents.defaults.models` object:
+
+```json
 {
-  agents: {
-    defaults: {
-      models: [
-        "coordinator",
-        "senior-engineer-1",
-        "senior-engineer-2",
-        "quality-agent",
-        "security-agent",
-        "devops-agent",
-        "monitoring-agent",
-        "codellama:7b-instruct-q4_K_M"
-      ]
+  "agents": {
+    "defaults": {
+      "models": {
+        "ollama/coordinator:latest": {},
+        "ollama/senior-eng-1:latest": {},
+        "ollama/senior-eng-2:latest": {},
+        "ollama-pc2/quality-agent:latest": {},
+        "ollama-pc2/security-agent:latest": {},
+        "ollama-pc2/codellama:7b-instruct-q4_K_M": {},
+        "ollama-laptop/devops-agent:latest": {},
+        "ollama-laptop/monitoring-agent:latest": {}
+      }
     }
   }
 }
 ```
+
+> **Note**: This is an object with empty `{}` values (not an array). The keys are the full `provider/model` identifiers.
 
 ### Step 3: Verify Model Availability
 
 On PC1, check which models the Gateway can see:
 
 ```powershell
-openclaw models status
+openclaw models list
 ```
 
 This queries all configured providers and shows which models are available. You should see the custom models from all three Ollama instances.
 
-> **Note**: `openclaw models status` only shows models visible to the Gateway through its configured providers. It does NOT scan the network — it checks the specific Ollama URLs you configured.
+> **Note**: `openclaw models list` only shows models visible to the Gateway through its configured providers. It does NOT scan the network — it checks the specific Ollama URLs you configured.
 
 ### Step 4: Test Remote Ollama Connectivity
 
-If `openclaw models status` doesn't show PC2 or Laptop models, verify the Ollama instances are reachable:
+If `openclaw models list` doesn't show PC2 or Laptop models, verify the Ollama instances are reachable:
 
 ```powershell
 # Test PC2's Ollama from PC1
@@ -586,7 +613,7 @@ The Anthropic provider should already exist in `openclaw.json` from the onboardi
 From PC1, verify the Anthropic provider works:
 
 ```powershell
-openclaw models status
+openclaw models list
 # Should show "anthropic" provider as connected with available models
 ```
 
@@ -603,11 +630,11 @@ openclaw models status
 - [ ] `ollama list` shows custom models on PC1, PC2, and Laptop
 - [ ] Remote Ollama providers configured in `openclaw.json` on PC1 (`ollama-local`, `ollama-pc2`, `ollama-laptop`)
 - [ ] Model allowlist configured in `agents.defaults.models`
-- [ ] `openclaw models status` on PC1 shows models from all three providers
+- [ ] `openclaw models list` on PC1 shows models from all three providers
 - [ ] Remote Ollama reachable from PC1 (`Invoke-RestMethod` to port 11434)
 - [ ] Each model responds to direct API test
 - [ ] Claude.ai API key configured via `openclaw models auth paste-token --provider anthropic`
-- [ ] Anthropic provider shows as connected in `openclaw models status`
+- [ ] Anthropic provider shows as connected in `openclaw models list`
 
 ---
 
