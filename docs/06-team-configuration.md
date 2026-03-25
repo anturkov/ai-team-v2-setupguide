@@ -96,7 +96,20 @@ You should see all 7 agents listed, each with its own workspace directory.
 
 The model identifier format is `<provider-name>/<model-id>`, matching the output of `openclaw models list`. For example: `ollama-pc2/quality-agent:latest`.
 
-**Edit `~/.openclaw/openclaw.json` on PC1.** In the `agents.list` array, add a `model` object with a `primary` field to each agent:
+**Edit `~/.openclaw/openclaw.json` on PC1.** In the `agents.list` array, each agent needs these fields:
+
+| Field | Purpose | Required? |
+|-------|---------|-----------|
+| `id` | Unique identifier for the agent | Yes |
+| `name` | Display name (usually same as `id`) | Yes — agents without `name` may not fully initialize |
+| `workspace` | Path to the agent's workspace directory (contains SOUL.md, skills, memory) | Yes |
+| `agentDir` | Path to the agent's state directory (auth profiles, session data) | Yes — **without this, the workspace directory may not be created** |
+| `model.primary` | The `provider/model-id` this agent should use | Recommended (otherwise inherits default) |
+| `default` | Set to `true` for the default agent (receives unrouted messages) | Only on one agent |
+
+> **⚠️ Critical: All four fields (`id`, `name`, `workspace`, `agentDir`) are required for each agent.** If `name` or `agentDir` are missing, OpenClaw may not create the workspace directory or fully register the agent. This is a common issue when agents are added by manually editing the JSON rather than using `openclaw agents add`.
+
+Here is the complete `agents.list` with all required fields:
 
 ```json
 {
@@ -104,48 +117,61 @@ The model identifier format is `<provider-name>/<model-id>`, matching the output
     "list": [
       {
         "id": "coordinator",
+        "name": "coordinator",
         "default": true,
-        "workspace": "C:\\Users\\atuadm\\.openclaw\\workspace-coordinator"
-        // No model field needed — the coordinator inherits agents.defaults.model.primary
+        "workspace": "C:\\Users\\atuadm\\.openclaw\\workspace-coordinator",
+        "agentDir": "C:\\Users\\atuadm\\.openclaw\\agents\\coordinator\\agent"
       },
       {
         "id": "senior-engineer-1",
+        "name": "senior-engineer-1",
         "workspace": "C:\\Users\\atuadm\\.openclaw\\workspace-senior-eng-1",
+        "agentDir": "C:\\Users\\atuadm\\.openclaw\\agents\\senior-engineer-1\\agent",
         "model": {
           "primary": "ollama/senior-eng-1:latest"
         }
       },
       {
         "id": "senior-engineer-2",
+        "name": "senior-engineer-2",
         "workspace": "C:\\Users\\atuadm\\.openclaw\\workspace-senior-eng-2",
+        "agentDir": "C:\\Users\\atuadm\\.openclaw\\agents\\senior-engineer-2\\agent",
         "model": {
           "primary": "ollama/senior-eng-2:latest"
         }
       },
       {
         "id": "quality-agent",
+        "name": "quality-agent",
         "workspace": "C:\\Users\\atuadm\\.openclaw\\workspace-quality",
+        "agentDir": "C:\\Users\\atuadm\\.openclaw\\agents\\quality-agent\\agent",
         "model": {
           "primary": "ollama-pc2/quality-agent:latest"
         }
       },
       {
         "id": "security-agent",
+        "name": "security-agent",
         "workspace": "C:\\Users\\atuadm\\.openclaw\\workspace-security",
+        "agentDir": "C:\\Users\\atuadm\\.openclaw\\agents\\security-agent\\agent",
         "model": {
           "primary": "ollama-pc2/security-agent:latest"
         }
       },
       {
         "id": "devops-agent",
+        "name": "devops-agent",
         "workspace": "C:\\Users\\atuadm\\.openclaw\\workspace-devops",
+        "agentDir": "C:\\Users\\atuadm\\.openclaw\\agents\\devops-agent\\agent",
         "model": {
           "primary": "ollama-laptop/devops-agent:latest"
         }
       },
       {
         "id": "monitoring-agent",
+        "name": "monitoring-agent",
         "workspace": "C:\\Users\\atuadm\\.openclaw\\workspace-monitoring",
+        "agentDir": "C:\\Users\\atuadm\\.openclaw\\agents\\monitoring-agent\\agent",
         "model": {
           "primary": "ollama-laptop/monitoring-agent:latest"
         }
@@ -158,6 +184,25 @@ The model identifier format is `<provider-name>/<model-id>`, matching the output
 > **Model format**: The format is `<provider>/<model-id>`. Match the values from `openclaw models list` output exactly (e.g., `ollama-pc2/quality-agent:latest`, not just `quality-agent`).
 
 > **See [`docs/current_config/claude_openclaw_pc1.json`](current_config/claude_openclaw_pc1.json)** for the complete corrected config file with all changes annotated.
+
+### If Workspaces Were Not Created
+
+If any agent's workspace directory doesn't exist on disk after adding the `name` and `agentDir` fields, create them manually and restart:
+
+```powershell
+# Create missing workspace directories
+mkdir ~\.openclaw\workspace-senior-eng-1 -Force
+mkdir ~\.openclaw\workspace-senior-eng-2 -Force
+
+# Create missing agentDir directories
+mkdir ~\.openclaw\agents\senior-engineer-1\agent -Force
+mkdir ~\.openclaw\agents\senior-engineer-2\agent -Force
+
+# Restart to pick up changes
+openclaw gateway restart
+```
+
+Then copy the SOUL.md files into each workspace (see [Section 6.3](#63-agent-workspaces-and-soulmd)).
 
 ### The Default Model and Fallback Chain
 

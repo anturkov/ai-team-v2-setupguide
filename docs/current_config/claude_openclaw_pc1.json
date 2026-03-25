@@ -77,14 +77,18 @@
       },
       {
         "id": "senior-engineer-1",
+        "name": "senior-engineer-1",
         "workspace": "C:\\Users\\atuadm\\.openclaw\\workspace-senior-eng-1",
+        "agentDir": "C:\\Users\\atuadm\\.openclaw\\agents\\senior-engineer-1\\agent",
         "model": {
           "primary": "ollama/senior-eng-1:latest"
         }
       },
       {
         "id": "senior-engineer-2",
+        "name": "senior-engineer-2",
         "workspace": "C:\\Users\\atuadm\\.openclaw\\workspace-senior-eng-2",
+        "agentDir": "C:\\Users\\atuadm\\.openclaw\\agents\\senior-engineer-2\\agent",
         "model": {
           "primary": "ollama/senior-eng-2:latest"
         }
