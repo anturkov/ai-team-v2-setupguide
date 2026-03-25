@@ -2,6 +2,8 @@
 
 This chapter covers how the single OpenClaw Gateway on PC1 communicates with remote Ollama instances and Nodes on PC2 and Laptop.
 
+> **TL;DR — No webhooks needed.** OpenClaw does NOT use webhooks/hooks for inter-machine agent communication. There are only two channels: **Ollama HTTP API** (port 11434, for model inference) and **Node WebSocket** (port 18789, for remote shell execution). Both are direct connections managed by the Gateway.
+
 ---
 
 ## 8.1 How OpenClaw Cross-Machine Communication Works
@@ -119,26 +121,86 @@ Invoke-RestMethod -Uri "http://192.168.1.112:11434/api/generate" `
 ### Check Connected Nodes on PC1
 
 ```powershell
-openclaw devices list
+# List all nodes (paired and pending)
+openclaw nodes list
+
+# Show only currently connected nodes
+openclaw nodes list --connected
 ```
 
-You should see PC2 and Laptop listed as connected nodes.
+You should see PC2 and Laptop listed as connected nodes. Nodes are identified by **ID, display name, or IP address**.
+
+> **Tip**: If PC2 and Laptop don't appear, check that their Node processes are running and can reach PC1:18789. See [Section 8.5 - Troubleshooting](#85-troubleshooting-cross-machine-issues).
 
 ### Test Shell Execution on Remote Nodes
 
-From PC1, run a command on a remote node:
+From PC1, use `openclaw nodes run` to execute shell commands on remote machines:
 
 ```powershell
-# Run a command on PC2's node
-openclaw nodes run --device <pc2-device-id> "hostname"
+# Run a command on PC2's node (use node name, ID, or IP)
+openclaw nodes run --node pc2 -- hostname
 
 # Run a command on Laptop's node
-openclaw nodes run --device <laptop-device-id> "hostname"
+openclaw nodes run --node laptop -- hostname
 ```
 
 Each should return the hostname of the remote machine.
 
-> **Known Issue ([#20669](https://github.com/openclaw/openclaw/issues/20669))**: The agent runtime's exec tool may not properly dispatch to remote nodes — it routes to the gateway host instead. The CLI `openclaw nodes run` command works correctly. This is a known bug being tracked.
+### Using `nodes invoke` for Structured Commands
+
+For more structured interactions, use `openclaw nodes invoke` which calls specific command namespaces:
+
+```powershell
+# Run a shell command on PC2
+openclaw nodes invoke --node pc2 --command system.run --params '{"command": "ollama list"}'
+
+# Check device status on Laptop
+openclaw nodes invoke --node laptop --command device.status
+
+# Check what binaries are available on a node
+openclaw nodes invoke --node pc2 --command system.which --params '{"binary": "ollama"}'
+```
+
+**Available command namespaces** (depends on what the node advertises):
+
+| Namespace | Commands | Purpose |
+|-----------|----------|---------|
+| `system.*` | `system.run`, `system.which` | Shell execution, binary lookup |
+| `device.*` | `device.status`, `device.info`, `device.health` | Node health and info |
+| `notifications.*` | `notifications.list` | List notifications (mobile nodes) |
+
+> The simplest approach: use `openclaw nodes run --node <name> -- <command>` for quick shell commands, and `openclaw nodes invoke` for structured commands.
+
+### Per-Agent Exec Node Binding
+
+To make an agent's shell commands automatically execute on a specific remote node (instead of on PC1), add `tools.exec.node` to the agent config:
+
+```json
+{
+  "id": "quality-agent",
+  "tools": {
+    "exec": {
+      "node": "pc2"
+    }
+  }
+}
+```
+
+This means when the quality-agent runs a shell command (e.g., to check disk space or run tests), it executes on PC2 — not on PC1. See [`claude_openclaw_pc1.json`](current_config/claude_openclaw_pc1.json) for the complete config with all node bindings.
+
+**Our agent → node mapping:**
+
+| Agent | Model Inference (Ollama HTTP) | Shell Execution (Node WebSocket) |
+|-------|-------------------------------|----------------------------------|
+| coordinator | PC1 local (127.0.0.1:11434) | PC1 local (no node needed) |
+| senior-engineer-1 | PC1 local | PC1 local |
+| senior-engineer-2 | PC1 local | PC1 local |
+| quality-agent | PC2 (192.168.1.112:11434) | PC2 node (`tools.exec.node: "pc2"`) |
+| security-agent | PC2 (192.168.1.112:11434) | PC2 node (`tools.exec.node: "pc2"`) |
+| devops-agent | Laptop (192.168.1.113:11434) | Laptop node (`tools.exec.node: "laptop"`) |
+| monitoring-agent | Laptop (192.168.1.113:11434) | Laptop node (`tools.exec.node: "laptop"`) |
+
+> **Known Issue ([#20669](https://github.com/openclaw/openclaw/issues/20669))**: The agent runtime's exec tool may not always honor the `tools.exec.node` binding — it can route to the gateway host instead. The CLI `openclaw nodes run --node ...` command always works correctly. If agent exec doesn't route to the node, use the Coordinator's dispatch skill to call `openclaw nodes run` directly as a workaround.
 
 ---
 
@@ -289,9 +351,11 @@ Webhooks are covered in [Chapter 09 - GitHub Integration](09-github-integration.
 - [ ] PC2 and Laptop Ollama bound to `0.0.0.0:11434` (not just localhost)
 - [ ] Remote Ollama providers configured in `openclaw.json` on PC1
 - [ ] `Invoke-RestMethod` to PC2:11434 and Laptop:11434 returns model list from PC1
-- [ ] `openclaw models status` on PC1 shows models from all three providers
-- [ ] PC2 and Laptop Nodes connected (`openclaw devices list` on PC1)
-- [ ] Node shell execution works (`openclaw nodes run --device <id> "hostname"`)
+- [ ] `openclaw models list` on PC1 shows models from all three providers
+- [ ] PC2 and Laptop Nodes connected (`openclaw nodes list --connected` on PC1)
+- [ ] Node shell execution works (`openclaw nodes run --node pc2 -- hostname`)
+- [ ] `openclaw nodes invoke --node pc2 --command device.status` returns OK
+- [ ] Per-agent `tools.exec.node` bindings set for remote agents (quality, security → pc2; devops, monitoring → laptop)
 - [ ] Windows Firewall: port 18789 open on PC1, port 11434 open on PC2 + Laptop
 - [ ] Static IPs configured (recommended)
 

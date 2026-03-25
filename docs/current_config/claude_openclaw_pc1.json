@@ -102,6 +102,12 @@
         "agentDir": "C:\\Users\\atuadm\\.openclaw\\agents\\quality-agent\\agent",
         "model": {
           "primary": "ollama-pc2/quality-agent:latest"
+        },
+        "tools": {
+          "exec": {
+            "node": "pc2",
+            "_comment": "Shell commands from this agent execute on PC2's node via WebSocket"
+          }
         }
       },
       {
@@ -111,6 +117,12 @@
         "agentDir": "C:\\Users\\atuadm\\.openclaw\\agents\\security-agent\\agent",
         "model": {
           "primary": "ollama-pc2/security-agent:latest"
+        },
+        "tools": {
+          "exec": {
+            "node": "pc2",
+            "_comment": "Shell commands from this agent execute on PC2's node via WebSocket"
+          }
         }
       },
       {
@@ -120,6 +132,12 @@
         "agentDir": "C:\\Users\\atuadm\\.openclaw\\agents\\devops-agent\\agent",
         "model": {
           "primary": "ollama-laptop/devops-agent:latest"
+        },
+        "tools": {
+          "exec": {
+            "node": "laptop",
+            "_comment": "Shell commands from this agent execute on Laptop's node via WebSocket"
+          }
         }
       },
       {
@@ -129,6 +147,12 @@
         "agentDir": "C:\\Users\\atuadm\\.openclaw\\agents\\monitoring-agent\\agent",
         "model": {
           "primary": "ollama-laptop/monitoring-agent:latest"
+        },
+        "tools": {
+          "exec": {
+            "node": "laptop",
+            "_comment": "Shell commands from this agent execute on Laptop's node via WebSocket"
+          }
         }
       }
     ]

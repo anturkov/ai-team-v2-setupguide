@@ -57,15 +57,15 @@ The team follows a **hub-and-spoke** model with the Coordinator at the center:
 
 > **Key concept**: ALL agents are registered on **PC1's Gateway**, regardless of which machine runs their model. The Gateway routes each agent's inference requests to the correct Ollama provider (local, PC2, or Laptop) based on the agent's model configuration. PC2 and Laptop do NOT register agents — they only run Ollama and connect as Nodes.
 
-| Agent ID | Role | Model Provider | Ollama Instance | Workspace (on PC1) |
-|----------|------|----------------|-----------------|---------------------|
-| `coordinator` | Central command, Telegram interface | `ollama-local` | PC1 (127.0.0.1:11434) | `~/.openclaw/workspace-coordinator` |
-| `senior-engineer-1` | Architecture, system design | `ollama-local` | PC1 (127.0.0.1:11434) | `~/.openclaw/workspace-senior-eng-1` |
-| `senior-engineer-2` | Implementation, optimization | `ollama-local` | PC1 (127.0.0.1:11434) | `~/.openclaw/workspace-senior-eng-2` |
-| `quality-agent` | Code review, testing, documentation | `ollama-pc2` | PC2 (192.168.1.112:11434) | `~/.openclaw/workspace-quality` |
-| `security-agent` | Security analysis, vulnerability scanning | `ollama-pc2` | PC2 (192.168.1.112:11434) | `~/.openclaw/workspace-security` |
-| `devops-agent` | Deployment, CI/CD, infrastructure | `ollama-laptop` | Laptop (192.168.1.113:11434) | `~/.openclaw/workspace-devops` |
-| `monitoring-agent` | Resource tracking, performance analysis | `ollama-laptop` | Laptop (192.168.1.113:11434) | `~/.openclaw/workspace-monitoring` |
+| Agent ID | Role | Model Provider | Ollama Instance | Exec Node | Workspace (on PC1) |
+|----------|------|----------------|-----------------|-----------|---------------------|
+| `coordinator` | Central command, Telegram interface | `ollama` | PC1 (127.0.0.1:11434) | — (local) | `~/.openclaw/workspace-coordinator` |
+| `senior-engineer-1` | Architecture, system design | `ollama` | PC1 (127.0.0.1:11434) | — (local) | `~/.openclaw/workspace-senior-eng-1` |
+| `senior-engineer-2` | Implementation, optimization | `ollama` | PC1 (127.0.0.1:11434) | — (local) | `~/.openclaw/workspace-senior-eng-2` |
+| `quality-agent` | Code review, testing, documentation | `ollama-pc2` | PC2 (192.168.1.112:11434) | `pc2` | `~/.openclaw/workspace-quality` |
+| `security-agent` | Security analysis, vulnerability scanning | `ollama-pc2` | PC2 (192.168.1.112:11434) | `pc2` | `~/.openclaw/workspace-security` |
+| `devops-agent` | Deployment, CI/CD, infrastructure | `ollama-laptop` | Laptop (192.168.1.113:11434) | `laptop` | `~/.openclaw/workspace-devops` |
+| `monitoring-agent` | Resource tracking, performance analysis | `ollama-laptop` | Laptop (192.168.1.113:11434) | `laptop` | `~/.openclaw/workspace-monitoring` |
 
 ### Adding Agents via CLI (all on PC1)
 
@@ -105,6 +105,7 @@ The model identifier format is `<provider-name>/<model-id>`, matching the output
 | `workspace` | Path to the agent's workspace directory (contains SOUL.md, skills, memory) | Yes |
 | `agentDir` | Path to the agent's state directory (auth profiles, session data) | Yes — **without this, the workspace directory may not be created** |
 | `model.primary` | The `provider/model-id` this agent should use | Recommended (otherwise inherits default) |
+| `tools.exec.node` | Node name/ID for remote shell execution (e.g., `"pc2"`, `"laptop"`) | Only for agents that need to run commands on remote machines |
 | `default` | Set to `true` for the default agent (receives unrouted messages) | Only on one agent |
 
 > **⚠️ Critical: All four fields (`id`, `name`, `workspace`, `agentDir`) are required for EVERY agent — including the `default` agent (coordinator).** If `name` or `agentDir` are missing, OpenClaw may not create the workspace directory, and worse, agents without their own `agentDir` will **share the default agent's session store**. This causes `openclaw doctor --fix` to report all such agents using the coordinator's `sessions.json`. This is a common issue when agents are added via CLI without specifying all fields, or when manually editing the JSON.
@@ -147,7 +148,8 @@ Here is the complete `agents.list` with all required fields:
         "agentDir": "C:\\Users\\atuadm\\.openclaw\\agents\\quality-agent\\agent",
         "model": {
           "primary": "ollama-pc2/quality-agent:latest"
-        }
+        },
+        "tools": { "exec": { "node": "pc2" } }
       },
       {
         "id": "security-agent",
@@ -156,7 +158,8 @@ Here is the complete `agents.list` with all required fields:
         "agentDir": "C:\\Users\\atuadm\\.openclaw\\agents\\security-agent\\agent",
         "model": {
           "primary": "ollama-pc2/security-agent:latest"
-        }
+        },
+        "tools": { "exec": { "node": "pc2" } }
       },
       {
         "id": "devops-agent",
@@ -165,7 +168,8 @@ Here is the complete `agents.list` with all required fields:
         "agentDir": "C:\\Users\\atuadm\\.openclaw\\agents\\devops-agent\\agent",
         "model": {
           "primary": "ollama-laptop/devops-agent:latest"
-        }
+        },
+        "tools": { "exec": { "node": "laptop" } }
       },
       {
         "id": "monitoring-agent",
@@ -174,7 +178,8 @@ Here is the complete `agents.list` with all required fields:
         "agentDir": "C:\\Users\\atuadm\\.openclaw\\agents\\monitoring-agent\\agent",
         "model": {
           "primary": "ollama-laptop/monitoring-agent:latest"
-        }
+        },
+        "tools": { "exec": { "node": "laptop" } }
       }
     ]
   }
@@ -575,8 +580,19 @@ To notify all agents, spawn a session for each agent with the same message.
 ## Shell Execution on Remote Machines
 
 To run commands on PC2 or Laptop (e.g., check disk space, run tests):
-- Use `openclaw nodes run` to dispatch shell commands to connected Nodes
-- Results are returned to the Coordinator's session
+
+```
+# Direct shell command on PC2
+openclaw nodes run --node pc2 -- <command>
+
+# Structured command on Laptop
+openclaw nodes invoke --node laptop --command system.run --params '{"command": "<command>"}'
+
+# Check node health
+openclaw nodes invoke --node pc2 --command device.status
+```
+
+Agents with `tools.exec.node` binding in their config will automatically route shell execution to their assigned node. See [Chapter 08](08-inter-machine-communication.md#83-verifying-node-connectivity) for details.
 ```
 
 ---
