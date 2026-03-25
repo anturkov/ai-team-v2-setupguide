@@ -158,7 +158,12 @@
     ]
   },
   "tools": {
-    "profile": "coding"
+    "profile": "coding",
+    "exec": {
+      "_comment": "ADDED: Allow Gateway to execute commands without approval prompts",
+      "security": "full",
+      "ask": "off"
+    }
   },
   "commands": {
     "native": "auto",
@@ -229,6 +234,14 @@
       "transport": "direct"
     },
     "nodes": {
+      "_comment": "ADDED: allowCommands to permit system.run on nodes. denyCommands blocks mobile-oriented commands.",
+      "allowCommands": [
+        "system.run",
+        "system.which",
+        "system.notify",
+        "system.execApprovals.get",
+        "system.execApprovals.set"
+      ],
       "denyCommands": [
         "camera.snap",
         "camera.clip",

@@ -132,9 +132,159 @@ You should see PC2 and Laptop listed as connected nodes. Nodes are identified by
 
 > **Tip**: If PC2 and Laptop don't appear, check that their Node processes are running and can reach PC1:18789. See [Section 8.5 - Troubleshooting](#85-troubleshooting-cross-machine-issues).
 
+### Configure Exec Approvals on Nodes (REQUIRED)
+
+> **⚠️ You MUST do this before shell execution will work.** By default, nodes require manual approval for every command sent from the Gateway. Without configuring exec approvals, `openclaw nodes run` will return `exec.approval.request` and hang waiting for approval.
+
+OpenClaw nodes use an **exec approval system** that controls which commands the Gateway is allowed to run. The approval policy is configured in `~/.openclaw/exec-approvals.json` **on each node** (PC2 and Laptop).
+
+#### Option: Allow Everything (Least Secure, Simplest)
+
+Since all machines are on your private LAN and you want no restrictions, configure both nodes to auto-approve all commands:
+
+**On PC2** — create/edit `C:\Users\<username>\.openclaw\exec-approvals.json`:
+
+```json
+{
+  "defaults": {
+    "security": "full",
+    "ask": "off",
+    "askFallback": "full",
+    "autoAllowSkills": true
+  }
+}
+```
+
+**On Laptop** — create the same file `C:\Users\<username>\.openclaw\exec-approvals.json`:
+
+```json
+{
+  "defaults": {
+    "security": "full",
+    "ask": "off",
+    "askFallback": "full",
+    "autoAllowSkills": true
+  }
+}
+```
+
+| Key | Value | Effect |
+|-----|-------|--------|
+| `security` | `"full"` | Allow ALL commands — no allowlist filtering |
+| `ask` | `"off"` | Never prompt for manual approval |
+| `askFallback` | `"full"` | If approval UI is unreachable, allow everything anyway |
+| `autoAllowSkills` | `true` | Auto-allowlist executables referenced by skills |
+
+Other `security` values for reference: `"deny"` (block all), `"allowlist"` (only allowlisted commands).
+Other `ask` values: `"always"` (prompt every time), `"on-miss"` (prompt when not in allowlist).
+
+#### Gateway-Side: Allow Node Commands on PC1
+
+The Gateway also has a command filter. By default, it may block certain `system.*` commands. Ensure the Gateway allows all necessary commands by running **on PC1**:
+
+```powershell
+openclaw config set gateway.nodes.allowCommands '["system.run","system.which","system.notify","system.execApprovals.get","system.execApprovals.set"]'
+```
+
+Or edit `~/.openclaw/openclaw.json` on PC1 and update the `gateway.nodes` section:
+
+```json
+{
+  "gateway": {
+    "nodes": {
+      "allowCommands": [
+        "system.run",
+        "system.which",
+        "system.notify",
+        "system.execApprovals.get",
+        "system.execApprovals.set"
+      ],
+      "denyCommands": [
+        "camera.snap",
+        "camera.clip",
+        "screen.record",
+        "contacts.add",
+        "calendar.add",
+        "reminders.add",
+        "sms.send"
+      ]
+    }
+  }
+}
+```
+
+> `allowCommands` takes precedence for listed commands. `denyCommands` blocks specific commands you never want to run (mobile-oriented commands in this case).
+
+#### Gateway-Side: Enable Elevated Exec Mode on PC1
+
+For maximum permissiveness, also set the Gateway's own exec tool to `full` security with no approval prompts. Run **on PC1**:
+
+```powershell
+openclaw config set tools.exec.security "full"
+openclaw config set tools.exec.ask "off"
+```
+
+Or add to `openclaw.json` on PC1:
+
+```json
+{
+  "tools": {
+    "exec": {
+      "security": "full",
+      "ask": "off"
+    }
+  }
+}
+```
+
+#### Restart Nodes After Changes
+
+After editing `exec-approvals.json`, restart the Node process on each machine:
+
+**On PC2:**
+```powershell
+# Stop the existing node (if running as scheduled task, stop it first)
+openclaw node disconnect
+# Reconnect
+openclaw node connect --gateway ws://192.168.1.106:18789
+```
+
+**On Laptop:**
+```powershell
+openclaw node disconnect
+openclaw node connect --gateway ws://192.168.1.106:18789
+```
+
+**On PC1 (restart Gateway to pick up allowCommands):**
+```powershell
+openclaw gateway restart
+```
+
+#### Verify Exec Approvals
+
+Check the current approval settings from PC1:
+
+```powershell
+# Check PC2's exec approval config remotely
+openclaw nodes invoke --node pc2 --command system.execApprovals.get
+
+# Check Laptop's exec approval config remotely
+openclaw nodes invoke --node laptop --command system.execApprovals.get
+```
+
+Both should return `{"security":"full","ask":"off"}`.
+
+> **Known Bug ([#23939](https://github.com/openclaw/openclaw/issues/23939))**: The Control UI dashboard may show approval settings, but changes made through the dashboard do **not** persist to the node's `exec-approvals.json`. Always edit the file directly on the node machine.
+
+> **Known Bug ([#22176](https://github.com/openclaw/openclaw/issues/22176))**: On headless nodes (no GUI), the `exec-approvals.sock` may not be created, causing `system.run` to be denied even with `security: "full"`. If you hit this, ensure the node process is running in an interactive session (not purely headless).
+
+> **See [`docs/current_config/exec-approvals_pc2.json`](current_config/exec-approvals_pc2.json)** and **[`docs/current_config/exec-approvals_laptop.json`](current_config/exec-approvals_laptop.json)** for the exact files to place on each node.
+
+---
+
 ### Test Shell Execution on Remote Nodes
 
-From PC1, use `openclaw nodes run` to execute shell commands on remote machines:
+After configuring exec approvals, test from PC1:
 
 ```powershell
 # Run a command on PC2's node (use node name, ID, or IP)
@@ -144,7 +294,7 @@ openclaw nodes run --node pc2 -- hostname
 openclaw nodes run --node laptop -- hostname
 ```
 
-Each should return the hostname of the remote machine.
+Each should return the hostname of the remote machine. If you still get `exec.approval.request`, check that `exec-approvals.json` is in the correct path and the node was restarted.
 
 ### Using `nodes invoke` for Structured Commands
 
@@ -304,6 +454,15 @@ To prevent IP addresses from changing, set static IPs on each machine.
 | Device not approved | Pairing not accepted | Run `openclaw devices list --pending` on PC1 and approve |
 | `spawn /usr/bin/ssh ENOENT` | SSH path bug on Windows | Set `agents.defaults.sandbox.ssh.command` to `"ssh"` ([Chapter 03](03-openclaw-installation.md#36-verify-cross-machine-connectivity)) |
 
+### Node Exec Approval Issues
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| `exec.approval.request` on `nodes run` | Node requires manual approval for commands | Create `exec-approvals.json` on the node with `security: "full"`, `ask: "off"` ([Section 8.3](#configure-exec-approvals-on-nodes-required)) |
+| `SYSTEM_RUN_DENIED` timeout | `exec-approvals.sock` not created (headless node) | Run node in interactive session, not purely headless ([#22176](https://github.com/openclaw/openclaw/issues/22176)) |
+| Approval settings reset after reboot | Dashboard changes don't persist | Edit `exec-approvals.json` directly, don't use Control UI ([#23939](https://github.com/openclaw/openclaw/issues/23939)) |
+| `system.run` blocked by gateway | `gateway.nodes.allowCommands` missing | Add `system.run` to `allowCommands` in PC1's `openclaw.json` |
+
 ### Agent Can't Use Remote Model
 
 | Symptom | Cause | Fix |
@@ -353,6 +512,10 @@ Webhooks are covered in [Chapter 09 - GitHub Integration](09-github-integration.
 - [ ] `Invoke-RestMethod` to PC2:11434 and Laptop:11434 returns model list from PC1
 - [ ] `openclaw models list` on PC1 shows models from all three providers
 - [ ] PC2 and Laptop Nodes connected (`openclaw nodes list --connected` on PC1)
+- [ ] **Exec approvals configured on PC2** (`exec-approvals.json` with `security: "full"`, `ask: "off"`)
+- [ ] **Exec approvals configured on Laptop** (same as PC2)
+- [ ] **Gateway allows node commands** (`gateway.nodes.allowCommands` includes `system.run`)
+- [ ] **Gateway exec tool set to full** (`tools.exec.security: "full"`, `tools.exec.ask: "off"`)
 - [ ] Node shell execution works (`openclaw nodes run --node pc2 -- hostname`)
 - [ ] `openclaw nodes invoke --node pc2 --command device.status` returns OK
 - [ ] Per-agent `tools.exec.node` bindings set for remote agents (quality, security → pc2; devops, monitoring → laptop)

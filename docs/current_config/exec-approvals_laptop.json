@@ -1,0 +1,10 @@
+{
+  "_comment": "Place this file at ~/.openclaw/exec-approvals.json on Laptop (192.168.1.113)",
+  "_warning": "This is the LEAST SECURE configuration — all commands auto-approved, no prompts",
+  "defaults": {
+    "security": "full",
+    "ask": "off",
+    "askFallback": "full",
+    "autoAllowSkills": true
+  }
+}
