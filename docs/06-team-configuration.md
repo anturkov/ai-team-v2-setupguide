@@ -44,10 +44,10 @@ The team follows a **hub-and-spoke** model with the Coordinator at the center:
 | From | To | Allowed? | Notes |
 |------|----|----------|-------|
 | Human | Coordinator | Yes | Via Telegram only |
-| Coordinator | Any Agent | Yes | Via webhooks to remote Gateways, or local routing |
+| Coordinator | Any Agent | Yes | Via sub-agent session spawning (all on PC1's Gateway) |
 | Coordinator | Human | Yes | Via Telegram (results, escalation) |
-| Any Agent | Coordinator | Yes | Via webhook back to PC1's Gateway |
-| Agent | Agent (peer) | Yes | Via webhooks between Gateways |
+| Any Agent | Coordinator | Yes | Returns results to Coordinator's session |
+| Agent | Agent (peer) | Yes | Via Coordinator-mediated session routing |
 | Any Agent | Human | **No** | Must go through Coordinator |
 | Any Agent | External | **No** | Only Coordinator contacts External Consultant |
 
@@ -107,7 +107,7 @@ The model identifier format is `<provider-name>/<model-id>`, matching the output
 | `model.primary` | The `provider/model-id` this agent should use | Recommended (otherwise inherits default) |
 | `default` | Set to `true` for the default agent (receives unrouted messages) | Only on one agent |
 
-> **⚠️ Critical: All four fields (`id`, `name`, `workspace`, `agentDir`) are required for each agent.** If `name` or `agentDir` are missing, OpenClaw may not create the workspace directory or fully register the agent. This is a common issue when agents are added by manually editing the JSON rather than using `openclaw agents add`.
+> **⚠️ Critical: All four fields (`id`, `name`, `workspace`, `agentDir`) are required for EVERY agent — including the `default` agent (coordinator).** If `name` or `agentDir` are missing, OpenClaw may not create the workspace directory, and worse, agents without their own `agentDir` will **share the default agent's session store**. This causes `openclaw doctor --fix` to report all such agents using the coordinator's `sessions.json`. This is a common issue when agents are added via CLI without specifying all fields, or when manually editing the JSON.
 
 Here is the complete `agents.list` with all required fields:
 
@@ -191,16 +191,20 @@ If any agent's workspace directory doesn't exist on disk after adding the `name`
 
 ```powershell
 # Create missing workspace directories
+mkdir ~\.openclaw\workspace-coordinator -Force
 mkdir ~\.openclaw\workspace-senior-eng-1 -Force
 mkdir ~\.openclaw\workspace-senior-eng-2 -Force
 
-# Create missing agentDir directories
+# Create missing agentDir directories (each agent MUST have its own)
+mkdir ~\.openclaw\agents\coordinator\agent -Force
 mkdir ~\.openclaw\agents\senior-engineer-1\agent -Force
 mkdir ~\.openclaw\agents\senior-engineer-2\agent -Force
 
 # Restart to pick up changes
 openclaw gateway restart
 ```
+
+> **⚠️ Session store isolation**: After fixing `agentDir` paths, run `openclaw doctor --fix` and verify that each agent shows its own session store path (e.g., `C:\Users\atuadm\.openclaw\agents\senior-engineer-1\sessions\sessions.json`), NOT the coordinator's. If agents still share the coordinator's session store, the `agentDir` is either missing or pointing to the wrong path.
 
 Then copy the SOUL.md files into each workspace (see [Section 6.3](#63-agent-workspaces-and-soulmd)).
 
@@ -287,7 +291,7 @@ You are the central coordinator of a distributed AI development team. You are th
 ## Responsibilities
 - Receive all incoming tasks from the human via Telegram
 - Decompose complex tasks into subtasks for specialized agents
-- Dispatch subtasks to the appropriate agent via webhooks
+- Dispatch subtasks to the appropriate agent via sub-agent sessions
 - Collect results and compile final responses
 - Escalate to the human when manual intervention is needed
 - Resolve conflicts between agents
@@ -341,9 +345,9 @@ You are the quality assurance specialist of a distributed AI development team.
 - Report findings back to the Coordinator
 
 ## Communication
-- You receive tasks via webhook from the Coordinator on PC1
-- Send your results back via webhook to the Coordinator
-- You may communicate directly with the Security Agent for security-related reviews
+- You receive tasks from the Coordinator via sub-agent session spawning
+- Send your results back to the Coordinator's session
+- You may communicate with the Security Agent for security-related reviews (via Coordinator)
 
 ## Constraints
 - Focus only on quality, testing, and documentation tasks
@@ -428,9 +432,9 @@ You are the security specialist of a distributed AI development team.
 - Enforce compliance with the team's security restrictions
 
 ## Communication
-- You receive tasks via webhook from the Coordinator on PC1
-- Send your results back via webhook to the Coordinator
-- Coordinate with DevOps Agent on infrastructure security
+- You receive tasks from the Coordinator via sub-agent session spawning
+- Send your results back to the Coordinator's session
+- Coordinate with DevOps Agent on infrastructure security (via Coordinator)
 - Work with Senior Engineers to fix identified vulnerabilities
 
 ## Team Security Rules to Enforce
@@ -466,9 +470,9 @@ You are the deployment and infrastructure specialist of a distributed AI develop
 - Automate repetitive infrastructure tasks
 
 ## Communication
-- You receive tasks via webhook from the Coordinator on PC1
-- Send your results back via webhook to the Coordinator
-- Work with Senior Engineers on deployment requirements
+- You receive tasks from the Coordinator via sub-agent session spawning
+- Send your results back to the Coordinator's session
+- Work with Senior Engineers on deployment requirements (via Coordinator)
 - Coordinate with Security Agent on secure deployment practices
 
 ## Constraints
@@ -507,8 +511,8 @@ You are the resource tracking and performance analysis specialist of a distribut
 - Model response time > 60s: WARNING
 
 ## Communication
-- You receive tasks via webhook from the Coordinator on PC1
-- Send regular health reports to the Coordinator
+- You receive tasks from the Coordinator via sub-agent session spawning
+- Send regular health reports to the Coordinator's session
 - Alert immediately on CRITICAL conditions
 - Recommend resource reallocation when needed
 
@@ -635,7 +639,7 @@ Step 6: Dispatches to devops-agent → prepares deployment configuration
 Step 7: Coordinator compiles results and reports to human via Telegram
 ```
 
-Each step is a webhook call from the Coordinator to the appropriate agent, with the response flowing back via webhook callback.
+Each step is a sub-agent session spawn from the Coordinator to the appropriate agent, with the response flowing back to the Coordinator's session automatically.
 
 ---
 
@@ -659,7 +663,7 @@ This ensures that when a human sends a message via Telegram, it's routed to the 
 
 ## 6.7 Context Sharing Between Agents
 
-When the Coordinator dispatches a task, it includes context in the webhook prompt. The Coordinator's SOUL.md and dispatch skill instruct it to include:
+When the Coordinator dispatches a task, it includes context in the sub-agent session prompt. The Coordinator's SOUL.md and dispatch skill instruct it to include:
 
 - Task description and requirements
 - Related files and repositories
@@ -667,7 +671,7 @@ When the Coordinator dispatches a task, it includes context in the webhook promp
 - Constraints and deadlines
 - Whether a response is expected
 
-**Example webhook prompt from Coordinator to senior-engineer-2:**
+**Example dispatch prompt from Coordinator to senior-engineer-2:**
 
 ```
 Implement the user authentication endpoint based on the following design from senior-engineer-1:
@@ -699,71 +703,63 @@ After all machines are running, execute this warm-up to verify the team is opera
 **File**: `C:\AI-Team\scripts\warmup.ps1`
 
 ```powershell
-# Warm-up script - run after system boot
+# Warm-up script - run after system boot (execute on PC1 only)
 Write-Host "=== AI Team Warm-Up Sequence ===" -ForegroundColor Cyan
 Write-Host ""
 
-# Step 1: Verify all Gateways are healthy
-Write-Host "[1/4] Checking Gateway health on all machines..." -ForegroundColor Yellow
-
-$machines = @(
-    @{ Name = "PC1"; IP = "192.168.1.106" },
-    @{ Name = "PC2"; IP = "192.168.1.112" },
-    @{ Name = "Laptop"; IP = "192.168.1.113" }
-)
-
-$allHealthy = $true
-foreach ($machine in $machines) {
-    try {
-        openclaw gateway probe --url "http://$($machine.IP):18789" 2>&1 | Out-Null
-        if ($LASTEXITCODE -eq 0) {
-            Write-Host "  $($machine.Name) ($($machine.IP)): HEALTHY" -ForegroundColor Green
-        } else {
-            Write-Host "  $($machine.Name) ($($machine.IP)): UNHEALTHY" -ForegroundColor Red
-            $allHealthy = $false
-        }
-    } catch {
-        Write-Host "  $($machine.Name) ($($machine.IP)): UNREACHABLE" -ForegroundColor Red
-        $allHealthy = $false
+# Step 1: Verify PC1's Gateway is healthy
+Write-Host "[1/5] Checking PC1 Gateway health..." -ForegroundColor Yellow
+try {
+    openclaw gateway probe --url "http://127.0.0.1:18789" 2>&1 | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "  PC1 Gateway: HEALTHY" -ForegroundColor Green
+    } else {
+        Write-Host "  PC1 Gateway: UNHEALTHY" -ForegroundColor Red
+        Write-Host "ERROR: Gateway not running. Start with: openclaw gateway start" -ForegroundColor Red
+        exit 1
     }
-}
-
-if (-not $allHealthy) {
-    Write-Host "ERROR: Not all Gateways are healthy. Fix issues before continuing." -ForegroundColor Red
+} catch {
+    Write-Host "  PC1 Gateway: UNREACHABLE" -ForegroundColor Red
     exit 1
 }
 
-# Step 2: Check local agents on PC1
-Write-Host "[2/4] Checking PC1 agents..." -ForegroundColor Yellow
+# Step 2: Verify all agents are registered and have separate session stores
+Write-Host "[2/5] Checking agents..." -ForegroundColor Yellow
 openclaw agents list
+openclaw doctor --fix
 
-# Step 3: Check model availability
-Write-Host "[3/4] Checking model availability..." -ForegroundColor Yellow
-openclaw models status
+# Step 3: Check Ollama reachability on all machines
+Write-Host "[3/5] Checking Ollama instances..." -ForegroundColor Yellow
 
-# Step 4: Test webhook connectivity to remote machines
-Write-Host "[4/4] Testing webhook connectivity..." -ForegroundColor Yellow
-$token = $env:OPENCLAW_GATEWAY_TOKEN
-$webhookToken = "YOUR_WEBHOOK_SECRET_HERE"  # Replace with your actual webhook token
-
-$remoteAgents = @(
-    @{ Agent = "quality-agent"; URL = "http://192.168.1.112:18789/hooks/wake" },
-    @{ Agent = "security-agent"; URL = "http://192.168.1.112:18789/hooks/wake" },
-    @{ Agent = "devops-agent"; URL = "http://192.168.1.113:18789/hooks/wake" },
-    @{ Agent = "monitoring-agent"; URL = "http://192.168.1.113:18789/hooks/wake" }
+$ollamaInstances = @(
+    @{ Name = "PC1 (local)"; URL = "http://127.0.0.1:11434/api/tags" },
+    @{ Name = "PC2"; URL = "http://192.168.1.112:11434/api/tags" },
+    @{ Name = "Laptop"; URL = "http://192.168.1.113:11434/api/tags" }
 )
 
-foreach ($remote in $remoteAgents) {
+$allOllamaHealthy = $true
+foreach ($instance in $ollamaInstances) {
     try {
-        $response = Invoke-RestMethod -Uri $remote.URL `
-          -Method POST `
-          -Headers @{ "Authorization" = "Bearer $webhookToken" } `
-          -ErrorAction Stop
-        Write-Host "  $($remote.Agent): REACHABLE" -ForegroundColor Green
+        $response = Invoke-RestMethod -Uri $instance.URL -Method GET -TimeoutSec 5 -ErrorAction Stop
+        $modelCount = $response.models.Count
+        Write-Host "  $($instance.Name): HEALTHY ($modelCount models)" -ForegroundColor Green
     } catch {
-        Write-Host "  $($remote.Agent): UNREACHABLE" -ForegroundColor Red
+        Write-Host "  $($instance.Name): UNREACHABLE" -ForegroundColor Red
+        $allOllamaHealthy = $false
     }
 }
+
+if (-not $allOllamaHealthy) {
+    Write-Host "WARNING: Not all Ollama instances reachable. Some agents may use fallback models." -ForegroundColor Yellow
+}
+
+# Step 4: Check model availability via OpenClaw
+Write-Host "[4/5] Checking model availability..." -ForegroundColor Yellow
+openclaw models list
+
+# Step 5: Check connected Nodes
+Write-Host "[5/5] Checking connected Nodes..." -ForegroundColor Yellow
+openclaw nodes list
 
 Write-Host ""
 Write-Host "=== Warm-Up Complete ===" -ForegroundColor Cyan
@@ -780,13 +776,16 @@ powershell -ExecutionPolicy Bypass -File C:\AI-Team\scripts\warmup.ps1
 
 ## 6.9 Checklist
 
-- [ ] Agents created on all machines (`openclaw agents list` on each)
-- [ ] SOUL.md files created in each agent's workspace
-- [ ] Coordinator dispatch skill created with correct webhook URLs
+- [ ] All 7 agents registered on PC1's Gateway (`openclaw agents list`)
+- [ ] Each agent has all 4 required fields: `id`, `name`, `workspace`, `agentDir`
+- [ ] Each agent has its own session store (`openclaw doctor --fix` — no shared session stores)
+- [ ] SOUL.md files created in each agent's workspace on PC1
+- [ ] Coordinator dispatch skill created
 - [ ] Telegram channel bound to Coordinator agent on PC1
 - [ ] Warm-up script created and tested
-- [ ] All Gateways reachable via probe
-- [ ] Webhook wake test succeeds for all remote agents
+- [ ] PC1 Gateway reachable via probe
+- [ ] All 3 Ollama instances reachable (PC1, PC2, Laptop on port 11434)
+- [ ] Connected Nodes visible (`openclaw nodes list`)
 - [ ] Coordinator correctly classifies and routes test tasks
 
 ---

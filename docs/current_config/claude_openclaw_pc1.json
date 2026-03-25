@@ -71,9 +71,11 @@
     "list": [
       {
         "id": "coordinator",
+        "name": "coordinator",
         "default": true,
         "workspace": "C:\\Users\\atuadm\\.openclaw\\workspace-coordinator",
-        "_comment": "No per-agent model needed — inherits agents.defaults.model.primary (ollama/coordinator:latest)"
+        "agentDir": "C:\\Users\\atuadm\\.openclaw\\agents\\coordinator\\agent",
+        "_comment": "FIXED: Added missing 'name' and 'agentDir'. Without agentDir, all PC1-local agents shared the coordinator's session store."
       },
       {
         "id": "senior-engineer-1",
