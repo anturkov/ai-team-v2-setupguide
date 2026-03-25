@@ -66,7 +66,15 @@
       },
       "workspace": "~/.openclaw/workspace",
       "timeoutSeconds": 600,
-      "maxConcurrent": 2
+      "maxConcurrent": 3,
+      "subagents": {
+        "_comment": "ADDED: Sub-agent spawning limits for sessions_spawn",
+        "runTimeoutSeconds": 900,
+        "archiveAfterMinutes": 60,
+        "maxSpawnDepth": 1,
+        "maxChildrenPerAgent": 5,
+        "maxConcurrent": 3
+      }
     },
     "list": [
       {
@@ -160,9 +168,22 @@
   "tools": {
     "profile": "coding",
     "exec": {
-      "_comment": "ADDED: Allow Gateway to execute commands without approval prompts",
+      "_comment": "Allow Gateway to execute commands without approval prompts",
       "security": "full",
       "ask": "off"
+    },
+    "agentToAgent": {
+      "_comment": "ADDED: Enable inter-agent communication. Without this, the Coordinator CANNOT dispatch to other agents.",
+      "enabled": true,
+      "allow": [
+        "coordinator",
+        "senior-engineer-1",
+        "senior-engineer-2",
+        "quality-agent",
+        "security-agent",
+        "devops-agent",
+        "monitoring-agent"
+      ]
     }
   },
   "commands": {
@@ -172,7 +193,16 @@
     "ownerDisplay": "raw"
   },
   "session": {
-    "dmScope": "per-channel-peer"
+    "dmScope": "per-channel-peer",
+    "agentToAgent": {
+      "_comment": "ADDED: Controls ping-pong turns after sessions_send reply (0-5, default 5). Set to 3 to prevent runaway conversations.",
+      "maxPingPongTurns": 3
+    },
+    "sendPolicy": {
+      "_comment": "ADDED: Allow any agent to message any other agent. Use 'deny' + rules for restrictions.",
+      "rules": [],
+      "default": "allow"
+    }
   },
   "hooks": {
     "enabled": true,

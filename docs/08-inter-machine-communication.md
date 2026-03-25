@@ -1,8 +1,8 @@
 # Chapter 08 - Inter-Machine Communication
 
-This chapter covers how the single OpenClaw Gateway on PC1 communicates with remote Ollama instances and Nodes on PC2 and Laptop.
+This chapter covers how the single OpenClaw Gateway on PC1 (ATU-RIG02) communicates with remote Ollama instances on PC2 (ATURIG01) and Laptop (LTATU01).
 
-> **TL;DR — No webhooks needed.** OpenClaw does NOT use webhooks/hooks for inter-machine agent communication. There are only two channels: **Ollama HTTP API** (port 11434, for model inference) and **Node WebSocket** (port 18789, for remote shell execution). Both are direct connections managed by the Gateway.
+> **TL;DR — No webhooks or nodes needed for core operation.** OpenClaw does NOT use webhooks/hooks for inter-machine agent communication. The primary channel is the **Ollama HTTP API** (port 11434) — the Gateway on PC1 (ATU-RIG02) sends inference requests directly to remote Ollama instances on PC2 (ATURIG01) and Laptop (LTATU01). All agent logic, session routing, and inter-agent communication happen entirely on PC1's Gateway. **Nodes are optional** — only needed if you want agents to execute shell commands on remote machines.
 
 ---
 
@@ -14,7 +14,7 @@ OpenClaw uses a **hub-and-spoke** architecture, NOT independent gateways communi
 ┌──────────────────────────────────────────────────────────────────────────┐
 │                    OpenClaw Cross-Machine Architecture                    │
 │                                                                          │
-│  PC1 (192.168.1.106) — THE GATEWAY                                      │
+│  PC1 / ATU-RIG02 (192.168.1.106) — THE GATEWAY                          │
 │  ┌──────────────────────────────────────────────────────────────────┐    │
 │  │  Gateway (:18789)                                                │    │
 │  │                                                                  │    │
@@ -26,9 +26,9 @@ OpenClaw uses a **hub-and-spoke** architecture, NOT independent gateways communi
 │  │       ▼              ▼             ▼             ▼              │    │
 │  │  ┌──────────────────────────────────────────────────────────┐  │    │
 │  │  │              Model Provider Router                        │  │    │
-│  │  │  ollama-local  → 127.0.0.1:11434  (PC1)                 │  │    │
-│  │  │  ollama-pc2    → 192.168.1.112:11434  (PC2)              │  │    │
-│  │  │  ollama-laptop → 192.168.1.113:11434  (Laptop)           │  │    │
+│  │  │  ollama        → 127.0.0.1:11434  (PC1/ATU-RIG02)       │  │    │
+│  │  │  ollama-pc2    → 192.168.1.112:11434  (PC2/ATURIG01)    │  │    │
+│  │  │  ollama-laptop → 192.168.1.113:11434  (Laptop/LTATU01)  │  │    │
 │  │  │  anthropic     → api.anthropic.com  (Claude.ai)          │  │    │
 │  │  └──────────────────────────────────────────────────────────┘  │    │
 │  └──────────────────────────────────────────────────────────────────┘    │
@@ -36,8 +36,8 @@ OpenClaw uses a **hub-and-spoke** architecture, NOT independent gateways communi
 │       │ Ollama HTTP API      │ Ollama HTTP API     │ Ollama HTTP API    │
 │       ▼                      ▼                     ▼                     │
 │  ┌──────────┐        ┌──────────────┐      ┌──────────────┐            │
-│  │ Local    │        │ PC2          │      │ Laptop       │            │
-│  │ Ollama   │        │ Ollama       │      │ Ollama       │            │
+│  │ Local    │        │ PC2/ATURIG01 │      │ Laptop/      │            │
+│  │ Ollama   │        │ Ollama       │      │ LTATU01      │            │
 │  │ :11434   │        │ :11434       │      │ :11434       │            │
 │  └──────────┘        └──────────────┘      └──────────────┘            │
 │                             ▲                     ▲                     │
@@ -61,16 +61,18 @@ The Gateway on PC1 sends inference requests directly to remote Ollama instances 
 - **Direction**: PC1 Gateway → Remote Ollama (one-way; Gateway sends prompts, Ollama returns completions)
 - **Configuration**: `models.providers` in `openclaw.json` on PC1
 
-### Channel 2: Node WebSocket (Remote Shell Execution)
+### Channel 2: Node WebSocket (Remote Shell Execution) — OPTIONAL
 
-PC2 and Laptop run OpenClaw Nodes that connect to PC1's Gateway via WebSocket on port **18789**. This allows agents to execute shell commands on remote machines (e.g., run tests, check disk space, deploy code).
+> **You do NOT need Nodes for the team to function.** All agent communication (`sessions_send`, `sessions_spawn`) and model inference (Ollama HTTP) happen without Nodes. Nodes are only needed if you want agents to execute shell commands on remote machines (e.g., run tests on PC2, check disk on Laptop).
+
+PC2 (ATURIG01) and Laptop (LTATU01) can optionally run OpenClaw Nodes that connect to PC1's Gateway via WebSocket on port **18789**.
 
 - **Protocol**: WebSocket
 - **Port**: 18789 (PC1's Gateway port)
 - **Direction**: Nodes connect TO the Gateway (outbound from PC2/Laptop)
 - **Capabilities**: `system.run` (shell commands), `system.which` (binary lookup), file access
 
-> **Important distinction**: Model inference goes via Ollama HTTP API (port 11434). Shell execution goes via Node WebSocket (port 18789). These are separate channels.
+> **Important distinction**: Model inference goes via Ollama HTTP API (port 11434). Shell execution goes via Node WebSocket (port 18789). Inter-agent communication uses neither — it happens internally on the Gateway via session tools (see [Chapter 06, Section 6.4](06-team-configuration.md#64-enabling-agent-to-agent-communication)).
 
 ---
 

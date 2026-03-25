@@ -16,7 +16,7 @@ The team follows a **hub-and-spoke** model with the Coordinator at the center:
                                │
                         ┌──────▼───────┐
                         │ COORDINATOR  │  ◄── Final authority
-                        │ (PC1)        │
+                        │ (PC1 / ATU-RIG02)        │
                         └──┬───┬───┬───┘
                            │   │   │
           ┌────────────────┘   │   └────────────────┐
@@ -57,15 +57,15 @@ The team follows a **hub-and-spoke** model with the Coordinator at the center:
 
 > **Key concept**: ALL agents are registered on **PC1's Gateway**, regardless of which machine runs their model. The Gateway routes each agent's inference requests to the correct Ollama provider (local, PC2, or Laptop) based on the agent's model configuration. PC2 and Laptop do NOT register agents — they only run Ollama and connect as Nodes.
 
-| Agent ID | Role | Model Provider | Ollama Instance | Exec Node | Workspace (on PC1) |
-|----------|------|----------------|-----------------|-----------|---------------------|
-| `coordinator` | Central command, Telegram interface | `ollama` | PC1 (127.0.0.1:11434) | — (local) | `~/.openclaw/workspace-coordinator` |
-| `senior-engineer-1` | Architecture, system design | `ollama` | PC1 (127.0.0.1:11434) | — (local) | `~/.openclaw/workspace-senior-eng-1` |
-| `senior-engineer-2` | Implementation, optimization | `ollama` | PC1 (127.0.0.1:11434) | — (local) | `~/.openclaw/workspace-senior-eng-2` |
-| `quality-agent` | Code review, testing, documentation | `ollama-pc2` | PC2 (192.168.1.112:11434) | `pc2` | `~/.openclaw/workspace-quality` |
-| `security-agent` | Security analysis, vulnerability scanning | `ollama-pc2` | PC2 (192.168.1.112:11434) | `pc2` | `~/.openclaw/workspace-security` |
-| `devops-agent` | Deployment, CI/CD, infrastructure | `ollama-laptop` | Laptop (192.168.1.113:11434) | `laptop` | `~/.openclaw/workspace-devops` |
-| `monitoring-agent` | Resource tracking, performance analysis | `ollama-laptop` | Laptop (192.168.1.113:11434) | `laptop` | `~/.openclaw/workspace-monitoring` |
+| Agent ID | Role | Model Provider | Ollama Instance | Workspace (on PC1 / ATU-RIG02) |
+|----------|------|----------------|-----------------|-------------------------------|
+| `coordinator` | Central command, Telegram interface | `ollama` | PC1 / ATU-RIG02 (127.0.0.1:11434) | `~/.openclaw/workspace-coordinator` |
+| `senior-engineer-1` | Architecture, system design | `ollama` | PC1 / ATU-RIG02 (127.0.0.1:11434) | `~/.openclaw/workspace-senior-eng-1` |
+| `senior-engineer-2` | Implementation, optimization | `ollama` | PC1 / ATU-RIG02 (127.0.0.1:11434) | `~/.openclaw/workspace-senior-eng-2` |
+| `quality-agent` | Code review, testing, documentation | `ollama-pc2` | PC2 / ATURIG01 (192.168.1.112:11434) | `~/.openclaw/workspace-quality` |
+| `security-agent` | Security analysis, vulnerability scanning | `ollama-pc2` | PC2 / ATURIG01 (192.168.1.112:11434) | `~/.openclaw/workspace-security` |
+| `devops-agent` | Deployment, CI/CD, infrastructure | `ollama-laptop` | Laptop / LTATU01 (192.168.1.113:11434) | `~/.openclaw/workspace-devops` |
+| `monitoring-agent` | Resource tracking, performance analysis | `ollama-laptop` | Laptop / LTATU01 (192.168.1.113:11434) | `~/.openclaw/workspace-monitoring` |
 
 ### Adding Agents via CLI (all on PC1)
 
@@ -302,12 +302,12 @@ You are the central coordinator of a distributed AI development team. You are th
 - Resolve conflicts between agents
 
 ## Team Members
-- **senior-engineer-1** (PC1): Architecture, system design, complex problems
-- **senior-engineer-2** (PC1): Implementation, optimization, debugging
-- **quality-agent** (PC2 at 192.168.1.112): Code review, testing, documentation
-- **security-agent** (PC2 at 192.168.1.112): Security analysis, vulnerability scanning
-- **devops-agent** (Laptop at 192.168.1.113): Deployment, CI/CD, infrastructure
-- **monitoring-agent** (Laptop at 192.168.1.113): Resource tracking, performance
+- **senior-engineer-1** (PC1 / ATU-RIG02, local Ollama): Architecture, system design, complex problems
+- **senior-engineer-2** (PC1 / ATU-RIG02, local Ollama): Implementation, optimization, debugging
+- **quality-agent** (PC2 / ATURIG01, remote Ollama at 192.168.1.112): Code review, testing, documentation
+- **security-agent** (PC2 / ATURIG01, remote Ollama at 192.168.1.112): Security analysis, vulnerability scanning
+- **devops-agent** (Laptop / LTATU01, remote Ollama at 192.168.1.113): Deployment, CI/CD, infrastructure
+- **monitoring-agent** (Laptop / LTATU01, remote Ollama at 192.168.1.113): Resource tracking, performance
 
 ## Task Routing
 - Architecture/design tasks → senior-engineer-1
@@ -530,9 +530,191 @@ You are the resource tracking and performance analysis specialist of a distribut
 
 ---
 
-## 6.4 Coordinator Dispatch Skill
+## 6.4 Enabling Agent-to-Agent Communication
 
-The Coordinator needs a custom skill to dispatch tasks to other agents on the same Gateway. Since all agents are registered on PC1's Gateway, dispatch uses OpenClaw's native **sub-agent spawning** — no webhooks needed.
+> **⚠️ This is the MOST CRITICAL section.** Without the configuration below, your Coordinator CANNOT dispatch tasks to any other agent. By default, agent-to-agent communication is **OFF** in OpenClaw.
+
+OpenClaw provides two session tools for inter-agent communication:
+
+| Tool | Behavior | Use Case |
+|------|----------|----------|
+| `sessions_send` | Sends a message to another agent's session. Can wait for a reply (synchronous) or fire-and-forget. After the reply, a "ping-pong" loop allows back-and-forth. | Peer conversations, quick questions, status checks |
+| `sessions_spawn` | Creates an isolated sub-session for a target agent with a task prompt. Non-blocking — returns immediately. Results are announced back when done. | Delegating tasks, parallel work, independent subtasks |
+
+### 6.4.1 Enable `agentToAgent` in `openclaw.json`
+
+Add the following to `openclaw.json` on PC1 (ATU-RIG02):
+
+```json
+{
+  "tools": {
+    "agentToAgent": {
+      "enabled": true,
+      "allow": [
+        "coordinator",
+        "senior-engineer-1",
+        "senior-engineer-2",
+        "quality-agent",
+        "security-agent",
+        "devops-agent",
+        "monitoring-agent"
+      ]
+    }
+  }
+}
+```
+
+Or via CLI:
+
+```powershell
+openclaw config set tools.agentToAgent.enabled true
+openclaw config set tools.agentToAgent.allow '["coordinator","senior-engineer-1","senior-engineer-2","quality-agent","security-agent","devops-agent","monitoring-agent"]'
+```
+
+| Key | Purpose |
+|-----|---------|
+| `tools.agentToAgent.enabled` | Master switch — enables `sessions_send` and `sessions_spawn` tools for all agents |
+| `tools.agentToAgent.allow` | Allowlist of agent IDs that can participate in agent-to-agent communication |
+
+### 6.4.2 Configure Sub-Agent Defaults
+
+Add sub-agent spawning limits to `agents.defaults` in `openclaw.json`:
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "subagents": {
+        "runTimeoutSeconds": 900,
+        "archiveAfterMinutes": 60,
+        "maxSpawnDepth": 1,
+        "maxChildrenPerAgent": 5,
+        "maxConcurrent": 3
+      }
+    }
+  }
+}
+```
+
+| Key | Value | Purpose |
+|-----|-------|---------|
+| `runTimeoutSeconds` | `900` (15 min) | Maximum time a sub-agent task can run before being killed |
+| `archiveAfterMinutes` | `60` | Clean up completed sub-agent sessions after 1 hour |
+| `maxSpawnDepth` | `1` | Prevent sub-agents from spawning their own sub-agents (coordinator → agent, but NOT agent → agent → agent) |
+| `maxChildrenPerAgent` | `5` | Maximum concurrent sub-agent sessions per parent agent |
+| `maxConcurrent` | `3` | Maximum concurrent agent runs across the entire Gateway (important for local Ollama resource management) |
+
+### 6.4.3 Configure Session Send Policy
+
+Add session routing policy to `openclaw.json`:
+
+```json
+{
+  "session": {
+    "agentToAgent": {
+      "maxPingPongTurns": 3
+    },
+    "sendPolicy": {
+      "rules": [],
+      "default": "allow"
+    }
+  }
+}
+```
+
+| Key | Purpose |
+|-----|---------|
+| `maxPingPongTurns` | After a `sessions_send` reply, how many back-and-forth rounds are allowed (0-5, default 5). Set to 3 to prevent runaway conversations. |
+| `sendPolicy.default` | `"allow"` permits any agent to message any other agent. Use `"deny"` + specific rules for restrictions. |
+
+### 6.4.4 Restart Gateway
+
+After all config changes:
+
+```powershell
+openclaw gateway restart
+openclaw doctor --fix
+```
+
+### 6.4.5 Verify Agent-to-Agent Communication
+
+Test from the OpenClaw dashboard or Telegram by asking the Coordinator:
+
+```
+Ask senior-engineer-1 to explain the SOLID principles.
+```
+
+or:
+
+```
+Tell the security-agent to review the file src/auth.py for vulnerabilities.
+```
+
+The Coordinator should use `sessions_send` or `sessions_spawn` to dispatch the task. You can monitor active sessions:
+
+```powershell
+openclaw sessions --json
+```
+
+> **Known Bug ([#5813](https://github.com/openclaw/openclaw/issues/5813))**: In some versions, `agentToAgent.enabled: true` can break `sessions_spawn`. If sub-agents appear in the sessions list but stay at 0 tokens, try using `sessions_send` only. Check if your version (2026.3.22+) has the fix.
+
+> **Known Bug ([#50187](https://github.com/openclaw/openclaw/issues/50187))**: On Windows, `sessions_spawn` + `sessions_yield` may crash the Gateway. Avoid `sessions_yield`; the standard reply mechanism works fine.
+
+---
+
+## 6.5 Coordinator's AGENTS.md
+
+> **This file is how the Coordinator knows about its team.** Without `AGENTS.md`, the Coordinator has no idea which agents exist or what they do — it can't dispatch tasks even if `agentToAgent` is enabled.
+
+Create `~/.openclaw/workspace-coordinator/AGENTS.md` on PC1 (ATU-RIG02):
+
+```markdown
+# Available Team Members
+
+## senior-engineer-1
+- **Role**: Architecture specialist
+- **Expertise**: System design, API design, database schema, design patterns, scalability
+- **Model**: qwen2.5-coder:32b on PC1 (ATU-RIG02) local Ollama
+- **When to use**: Architecture decisions, system design, complex technical problems, design reviews
+
+## senior-engineer-2
+- **Role**: Implementation specialist
+- **Expertise**: Writing production code, optimization, debugging, refactoring, unit tests
+- **Model**: codellama:13b on PC1 (ATU-RIG02) local Ollama
+- **When to use**: Code implementation, bug fixes, performance optimization, code refactoring
+
+## quality-agent
+- **Role**: Quality assurance specialist
+- **Expertise**: Code review, testing, documentation, coding standards
+- **Model**: qwen2.5-coder:7b on PC2 (ATURIG01) remote Ollama
+- **When to use**: Code reviews, test creation, documentation checks, style enforcement
+
+## security-agent
+- **Role**: Security specialist
+- **Expertise**: OWASP Top 10, vulnerability scanning, dependency audits, auth/authz review
+- **Model**: mistral:7b on PC2 (ATURIG01) remote Ollama
+- **When to use**: Security audits, vulnerability checks, dependency reviews, compliance
+
+## devops-agent
+- **Role**: DevOps and infrastructure specialist
+- **Expertise**: CI/CD, Docker, deployment, Git workflows, infrastructure automation
+- **Model**: qwen2.5:3b on Laptop (LTATU01) remote Ollama
+- **When to use**: Deployments, CI/CD setup, infrastructure tasks, Git workflow management
+
+## monitoring-agent
+- **Role**: Monitoring and performance specialist
+- **Expertise**: Resource tracking, performance analysis, health checks, alerting
+- **Model**: phi3:3.8b on Laptop (LTATU01) remote Ollama
+- **When to use**: System health checks, resource monitoring, performance analysis, alerting
+```
+
+> **See [`docs/current_config/AGENTS_coordinator.md`](current_config/AGENTS_coordinator.md)** for the reference file.
+
+---
+
+## 6.6 Coordinator Dispatch Skill
+
+The Coordinator also needs a skill file that teaches it HOW to dispatch tasks using the session tools.
 
 ### Create the skill directory and SKILL.md
 
@@ -543,65 +725,60 @@ The Coordinator needs a custom skill to dispatch tasks to other agents on the sa
 ```markdown
 ---
 name: Team Dispatch
-description: Send tasks to AI team members via sub-agent sessions
+description: Send tasks to AI team members via session tools
 ---
 
 # Team Dispatch Skill
 
-Use this skill to send tasks to other agents on the team. All agents run on the same Gateway — dispatch happens via OpenClaw's native session spawning.
+Use this skill to send tasks to other agents on the team. All agents run on the same Gateway on PC1 (ATU-RIG02).
 
-## Available Agents
+## How to Dispatch
 
-| Agent | Model Location | Specialty |
-|-------|---------------|-----------|
-| senior-engineer-1 | PC1 (local Ollama) | Architecture, system design |
-| senior-engineer-2 | PC1 (local Ollama) | Implementation, optimization |
-| quality-agent | PC2 (remote Ollama) | Code review, testing, documentation |
-| security-agent | PC2 (remote Ollama) | Security analysis, vulnerability scanning |
-| devops-agent | Laptop (remote Ollama) | Deployment, CI/CD, infrastructure |
-| monitoring-agent | Laptop (remote Ollama) | Resource tracking, performance |
+### For quick questions or status checks — use `sessions_send`:
+Call the `sessions_send` tool with:
+- `sessionKey`: The target agent's ID (e.g., "senior-engineer-1")
+- `message`: Your question or request
+- `timeoutSeconds`: 120 (wait up to 2 minutes for a reply)
 
-## Dispatching a Task
+### For independent tasks — use `sessions_spawn`:
+Call the `sessions_spawn` tool with:
+- `agentId`: The target agent's ID
+- `message`: Full task description with context and expected deliverables
 
-To assign a task to a team member, spawn a sub-agent session:
-- Use `sessions_spawn` to create a new session for the target agent
-- Include the task description, relevant context, and expected deliverables
-- The sub-agent processes the task and returns results to this session
+`sessions_spawn` is non-blocking — the agent works independently and announces results when done.
 
-## Collecting Results
+## Agent Roster
 
-Sub-agent results are returned to the Coordinator's session automatically.
-Use `sessions_history` to review previous task results if needed.
+| Agent ID | Specialty | Use When |
+|----------|-----------|----------|
+| senior-engineer-1 | Architecture, design | Design questions, architecture review |
+| senior-engineer-2 | Implementation, coding | Code writing, bug fixes, optimization |
+| quality-agent | Quality, testing | Code review, test creation |
+| security-agent | Security | Vulnerability checks, security audits |
+| devops-agent | DevOps, CI/CD | Deployments, infrastructure |
+| monitoring-agent | Monitoring | Health checks, performance reports |
 
-## Broadcasting
+## Multi-Step Workflows
 
-To notify all agents, spawn a session for each agent with the same message.
+For tasks requiring multiple agents:
+1. Use `sessions_spawn` to dispatch to the first agent
+2. Wait for results (check with `sessions_list`)
+3. Pass results to the next agent via another `sessions_send` or `sessions_spawn`
+4. Compile final results and report to the human via Telegram
 
-## Shell Execution on Remote Machines
+## Checking Results
 
-To run commands on PC2 or Laptop (e.g., check disk space, run tests):
-
-```
-# Direct shell command on PC2
-openclaw nodes run --node pc2 -- <command>
-
-# Structured command on Laptop
-openclaw nodes invoke --node laptop --command system.run --params '{"command": "<command>"}'
-
-# Check node health
-openclaw nodes invoke --node pc2 --command device.status
-```
-
-Agents with `tools.exec.node` binding in their config will automatically route shell execution to their assigned node. See [Chapter 08](08-inter-machine-communication.md#83-verifying-node-connectivity) for details.
+- `sessions_list`: See all active and completed sessions
+- `sessions_history`: Review past session results
 ```
 
 ---
 
-## 6.5 Task Types and Routing
+## 6.7 Task Types and Routing
 
 When the Coordinator receives a task, it classifies it and routes it to the right agent(s). Here's the decision tree:
 
-### 6.5.1 Task Classification
+### 6.7.1 Task Classification
 
 ```
 Incoming Task
@@ -639,7 +816,7 @@ Incoming Task
               → or asks human for clarification via Telegram
 ```
 
-### 6.5.2 Multi-Agent Workflows
+### 6.7.2 Multi-Agent Workflows
 
 Some tasks require multiple agents working in sequence:
 
@@ -659,7 +836,7 @@ Each step is a sub-agent session spawn from the Coordinator to the appropriate a
 
 ---
 
-## 6.6 Telegram Channel Binding
+## 6.8 Telegram Channel Binding
 
 On PC1, bind the Telegram channel to the Coordinator agent so all human messages go to it:
 
@@ -677,7 +854,7 @@ This ensures that when a human sends a message via Telegram, it's routed to the 
 
 ---
 
-## 6.7 Context Sharing Between Agents
+## 6.9 Context Sharing Between Agents
 
 When the Coordinator dispatches a task, it includes context in the sub-agent session prompt. The Coordinator's SOUL.md and dispatch skill instruct it to include:
 
@@ -710,7 +887,7 @@ After implementation, respond with:
 
 ---
 
-## 6.8 Warm-Up Sequence
+## 6.10 Warm-Up Sequence
 
 After all machines are running, execute this warm-up to verify the team is operational.
 
@@ -790,18 +967,24 @@ powershell -ExecutionPolicy Bypass -File C:\AI-Team\scripts\warmup.ps1
 
 ---
 
-## 6.9 Checklist
+## 6.11 Checklist
 
-- [ ] All 7 agents registered on PC1's Gateway (`openclaw agents list`)
+- [ ] All 7 agents registered on PC1 (ATU-RIG02) Gateway (`openclaw agents list`)
 - [ ] Each agent has all 4 required fields: `id`, `name`, `workspace`, `agentDir`
 - [ ] Each agent has its own session store (`openclaw doctor --fix` — no shared session stores)
-- [ ] SOUL.md files created in each agent's workspace on PC1
-- [ ] Coordinator dispatch skill created
-- [ ] Telegram channel bound to Coordinator agent on PC1
+- [ ] **`tools.agentToAgent.enabled: true`** set in `openclaw.json`
+- [ ] **`tools.agentToAgent.allow`** lists all 7 agent IDs
+- [ ] **`agents.defaults.subagents`** configured (timeout, depth, concurrency)
+- [ ] **`session.agentToAgent.maxPingPongTurns`** set (recommended: 3)
+- [ ] **`session.sendPolicy.default: "allow"`** set
+- [ ] **AGENTS.md** created in coordinator workspace (`~/.openclaw/workspace-coordinator/AGENTS.md`)
+- [ ] SOUL.md files created in each agent's workspace on PC1 (ATU-RIG02)
+- [ ] Coordinator dispatch skill created (`skills/dispatch/SKILL.md`)
+- [ ] Telegram channel bound to Coordinator agent
+- [ ] **Agent-to-agent test**: Ask coordinator to dispatch a task to another agent — verify reply comes back
 - [ ] Warm-up script created and tested
-- [ ] PC1 Gateway reachable via probe
-- [ ] All 3 Ollama instances reachable (PC1, PC2, Laptop on port 11434)
-- [ ] Connected Nodes visible (`openclaw nodes list`)
+- [ ] PC1 (ATU-RIG02) Gateway reachable via probe
+- [ ] All 3 Ollama instances reachable (PC1/ATU-RIG02, PC2/ATURIG01, Laptop/LTATU01 on port 11434)
 - [ ] Coordinator correctly classifies and routes test tasks
 
 ---
