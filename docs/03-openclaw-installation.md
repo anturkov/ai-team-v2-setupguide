@@ -161,7 +161,7 @@ Open the Ubuntu terminal on PC1 (ATU-RIG02):
 
 ```bash
 # Install OpenClaw (this also installs Node.js 24 if needed)
-curl -fsSL https://get.openclaw.ai | bash
+curl -fsSL https://openclaw.ai/install.sh | bash
 ```
 
 After installation completes, run the onboarding wizard:
