@@ -1,0 +1,166 @@
+{
+  "_comment": "Complete config — All 7 agents across PC1 (ATU-RIG02), PC2 (ATURIG01), Laptop (LTATU01). Place at ~/.openclaw/openclaw.json inside WSL2 on PC1.",
+  "models": {
+    "providers": {
+      "ollama": {
+        "baseUrl": "http://localhost:11434",
+        "apiKey": "ollama",
+        "api": "ollama"
+      },
+      "ollama-pc2": {
+        "baseUrl": "http://192.168.1.112:11434",
+        "apiKey": "ollama",
+        "api": "ollama"
+      },
+      "ollama-laptop": {
+        "baseUrl": "http://192.168.1.113:11434",
+        "apiKey": "ollama",
+        "api": "ollama"
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "ollama/coordinator:latest"
+      },
+      "models": {
+        "ollama/coordinator:latest": {},
+        "ollama/senior-eng-1:latest": {},
+        "ollama/senior-eng-2:latest": {},
+        "ollama-pc2/quality-agent:latest": {},
+        "ollama-pc2/security-agent:latest": {},
+        "ollama-laptop/devops-agent:latest": {},
+        "ollama-laptop/monitoring-agent:latest": {}
+      },
+      "workspace": "~/.openclaw/workspace",
+      "timeoutSeconds": 600,
+      "maxConcurrent": 3,
+      "subagents": {
+        "runTimeoutSeconds": 900,
+        "archiveAfterMinutes": 60,
+        "maxSpawnDepth": 1,
+        "maxChildrenPerAgent": 5,
+        "maxConcurrent": 3
+      }
+    },
+    "list": [
+      {
+        "id": "coordinator",
+        "name": "coordinator",
+        "default": true,
+        "workspace": "~/.openclaw/workspace-coordinator",
+        "agentDir": "~/.openclaw/agents/coordinator/agent"
+      },
+      {
+        "id": "senior-engineer-1",
+        "name": "senior-engineer-1",
+        "workspace": "~/.openclaw/workspace-senior-eng-1",
+        "agentDir": "~/.openclaw/agents/senior-engineer-1/agent",
+        "model": {
+          "primary": "ollama/senior-eng-1:latest"
+        }
+      },
+      {
+        "id": "senior-engineer-2",
+        "name": "senior-engineer-2",
+        "workspace": "~/.openclaw/workspace-senior-eng-2",
+        "agentDir": "~/.openclaw/agents/senior-engineer-2/agent",
+        "model": {
+          "primary": "ollama/senior-eng-2:latest"
+        }
+      },
+      {
+        "id": "quality-agent",
+        "name": "quality-agent",
+        "workspace": "~/.openclaw/workspace-quality",
+        "agentDir": "~/.openclaw/agents/quality-agent/agent",
+        "model": {
+          "primary": "ollama-pc2/quality-agent:latest"
+        }
+      },
+      {
+        "id": "security-agent",
+        "name": "security-agent",
+        "workspace": "~/.openclaw/workspace-security",
+        "agentDir": "~/.openclaw/agents/security-agent/agent",
+        "model": {
+          "primary": "ollama-pc2/security-agent:latest"
+        }
+      },
+      {
+        "id": "devops-agent",
+        "name": "devops-agent",
+        "workspace": "~/.openclaw/workspace-devops",
+        "agentDir": "~/.openclaw/agents/devops-agent/agent",
+        "model": {
+          "primary": "ollama-laptop/devops-agent:latest"
+        }
+      },
+      {
+        "id": "monitoring-agent",
+        "name": "monitoring-agent",
+        "workspace": "~/.openclaw/workspace-monitoring",
+        "agentDir": "~/.openclaw/agents/monitoring-agent/agent",
+        "model": {
+          "primary": "ollama-laptop/monitoring-agent:latest"
+        }
+      }
+    ]
+  },
+  "tools": {
+    "profile": "coding",
+    "exec": {
+      "security": "full",
+      "ask": "off"
+    },
+    "agentToAgent": {
+      "enabled": true,
+      "allow": [
+        "coordinator",
+        "senior-engineer-1",
+        "senior-engineer-2",
+        "quality-agent",
+        "security-agent",
+        "devops-agent",
+        "monitoring-agent"
+      ]
+    }
+  },
+  "session": {
+    "agentToAgent": {
+      "maxPingPongTurns": 3
+    },
+    "sendPolicy": {
+      "rules": [],
+      "default": "allow"
+    }
+  },
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "botToken": "YOUR_BOT_TOKEN_HERE",
+      "dmPolicy": "pairing",
+      "groups": {
+        "*": {
+          "requireMention": true
+        }
+      }
+    }
+  },
+  "bindings": [
+    {
+      "agentId": "coordinator",
+      "match": {
+        "channel": "telegram"
+      }
+    }
+  ],
+  "gateway": {
+    "port": 18789,
+    "bind": "lan",
+    "auth": {
+      "mode": "token"
+    }
+  }
+}

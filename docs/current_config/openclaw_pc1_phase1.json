@@ -1,0 +1,112 @@
+{
+  "_comment": "Phase 1 config — PC1 (ATU-RIG02) only: Coordinator + Senior Engineers. Place at ~/.openclaw/openclaw.json inside WSL2.",
+  "models": {
+    "providers": {
+      "ollama": {
+        "baseUrl": "http://localhost:11434",
+        "apiKey": "ollama",
+        "api": "ollama"
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "ollama/coordinator:latest"
+      },
+      "models": {
+        "ollama/coordinator:latest": {},
+        "ollama/senior-eng-1:latest": {},
+        "ollama/senior-eng-2:latest": {}
+      },
+      "workspace": "~/.openclaw/workspace",
+      "timeoutSeconds": 600,
+      "maxConcurrent": 3,
+      "subagents": {
+        "runTimeoutSeconds": 900,
+        "archiveAfterMinutes": 60,
+        "maxSpawnDepth": 1,
+        "maxChildrenPerAgent": 5,
+        "maxConcurrent": 3
+      }
+    },
+    "list": [
+      {
+        "id": "coordinator",
+        "name": "coordinator",
+        "default": true,
+        "workspace": "~/.openclaw/workspace-coordinator",
+        "agentDir": "~/.openclaw/agents/coordinator/agent"
+      },
+      {
+        "id": "senior-engineer-1",
+        "name": "senior-engineer-1",
+        "workspace": "~/.openclaw/workspace-senior-eng-1",
+        "agentDir": "~/.openclaw/agents/senior-engineer-1/agent",
+        "model": {
+          "primary": "ollama/senior-eng-1:latest"
+        }
+      },
+      {
+        "id": "senior-engineer-2",
+        "name": "senior-engineer-2",
+        "workspace": "~/.openclaw/workspace-senior-eng-2",
+        "agentDir": "~/.openclaw/agents/senior-engineer-2/agent",
+        "model": {
+          "primary": "ollama/senior-eng-2:latest"
+        }
+      }
+    ]
+  },
+  "tools": {
+    "profile": "coding",
+    "exec": {
+      "security": "full",
+      "ask": "off"
+    },
+    "agentToAgent": {
+      "enabled": true,
+      "allow": [
+        "coordinator",
+        "senior-engineer-1",
+        "senior-engineer-2"
+      ]
+    }
+  },
+  "session": {
+    "agentToAgent": {
+      "maxPingPongTurns": 3
+    },
+    "sendPolicy": {
+      "rules": [],
+      "default": "allow"
+    }
+  },
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "botToken": "YOUR_BOT_TOKEN_HERE",
+      "dmPolicy": "pairing",
+      "groups": {
+        "*": {
+          "requireMention": true
+        }
+      }
+    }
+  },
+  "bindings": [
+    {
+      "agentId": "coordinator",
+      "match": {
+        "channel": "telegram"
+      }
+    }
+  ],
+  "gateway": {
+    "port": 18789,
+    "bind": "lan",
+    "auth": {
+      "mode": "token"
+    }
+  }
+}
