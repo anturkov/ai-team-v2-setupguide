@@ -2,6 +2,36 @@
 
 This chapter configures all agents, enables agent-to-agent communication, and sets up the team hierarchy. We follow the **phased approach**: get PC1 (ATU-RIG02) working first, then add PC2 (ATURIG01) and Laptop (LTATU01).
 
+## Workspace Architecture: Separate Workspaces + Shared `cwd`
+
+Each agent has its **own workspace directory** with personalized bootstrap files (SOUL.md, AGENTS.md, IDENTITY.md, etc.). All agents share the **same `cwd` (current working directory)** — the actual project they're building together.
+
+```
+~/.openclaw/
+├── workspace-coordinator/       ← Coordinator's persona files (SOUL.md, AGENTS.md, etc.)
+├── workspace-senior-eng-1/      ← Senior Engineer 1's persona files
+├── workspace-senior-eng-2/      ← Senior Engineer 2's persona files
+├── workspace-quality/           ← Quality Agent's persona files
+├── workspace-security/          ← Security Agent's persona files
+├── workspace-devops/            ← DevOps Agent's persona files
+├── workspace-monitoring/        ← Monitoring Agent's persona files
+└── agents/                      ← Agent session stores (agentDir — NEVER share)
+    ├── coordinator/agent/
+    ├── senior-engineer-1/agent/
+    └── ...
+
+/home/<user>/project/            ← Shared cwd — ALL agents work here
+```
+
+**Why this pattern?**
+- Each agent loads its own personality and instructions from its workspace at session start
+- All agents read/write the same project files via the shared `cwd`
+- No bootstrap file conflicts (OpenClaw only loads MD files from workspace root)
+- Fast context — agents see each other's code changes immediately
+- `agentDir` stays separate per agent (session history, auth — must never be shared)
+
+Pre-built workspace files for all 7 agents are provided in this repo under `workspace-files/`. See [Section 6.17](#617-deploy-workspace-files) for deployment instructions.
+
 ---
 
 ## Phase 1: PC1 (ATU-RIG02) — Coordinator + Senior Engineers
@@ -79,19 +109,22 @@ Here is the **complete Phase 1 configuration**. Merge these sections into your e
         "name": "coordinator",
         "default": true,
         "workspace": "~/.openclaw/workspace-coordinator",
-        "agentDir": "~/.openclaw/agents/coordinator/agent"
+        "agentDir": "~/.openclaw/agents/coordinator/agent",
+        "cwd": "/home/<username>/project"
       },
       {
         "id": "senior-engineer-1",
         "name": "senior-engineer-1",
         "workspace": "~/.openclaw/workspace-senior-eng-1",
-        "agentDir": "~/.openclaw/agents/senior-engineer-1/agent"
+        "agentDir": "~/.openclaw/agents/senior-engineer-1/agent",
+        "cwd": "/home/<username>/project"
       },
       {
         "id": "senior-engineer-2",
         "name": "senior-engineer-2",
         "workspace": "~/.openclaw/workspace-senior-eng-2",
-        "agentDir": "~/.openclaw/agents/senior-engineer-2/agent"
+        "agentDir": "~/.openclaw/agents/senior-engineer-2/agent",
+        "cwd": "/home/<username>/project"
       }
     ]
   },
@@ -151,7 +184,11 @@ Here is the **complete Phase 1 configuration**. Merge these sections into your e
 
 **Important notes:**
 - Replace `YOUR_BOT_TOKEN_HERE` with your actual Telegram bot token (see [Chapter 07](07-telegram-bot-setup.md))
-- Each agent MUST have all 4 fields: `id`, `name`, `workspace`, `agentDir`
+- Replace `/home/<username>/project` with your actual shared project path inside WSL2
+- Each agent MUST have all 5 fields: `id`, `name`, `workspace`, `agentDir`, `cwd`
+- **`cwd`** points ALL agents to the same project directory — this is how they share code
+- **`workspace`** holds each agent's persona files (SOUL.md, AGENTS.md, etc.) — unique per agent
+- **`agentDir`** stores sessions and auth — NEVER share between agents
 - The `bindings` section routes ALL Telegram messages to the coordinator
 - `agentToAgent.enabled: true` is the master switch for inter-agent communication
 - `agentToAgent.allow` lists which agents can participate — add all of them
@@ -176,115 +213,20 @@ mkdir -p ~/.openclaw/agents/senior-engineer-2/agent
 
 ---
 
-### 6.4 Create AGENTS.md for the Coordinator
+### 6.4 Deploy Workspace Files (Phase 1)
 
-This file tells the Coordinator **who its team members are**. Without it, the Coordinator doesn't know it can dispatch tasks.
-
-Create `~/.openclaw/workspace-coordinator/AGENTS.md`:
+Each agent needs 8 MD files in its workspace directory. Pre-built files for all agents are provided in this repo under `workspace-files/`. Deploy the Phase 1 agent files:
 
 ```bash
-cat > ~/.openclaw/workspace-coordinator/AGENTS.md << 'EOF'
-# Available Team Members
-
-## senior-engineer-1
-- **Role**: Architecture specialist
-- **Expertise**: System design, API design, database schema, design patterns, scalability
-- **Model**: qwen3-coder:30b-a3b on PC1 (ATU-RIG02) — shared with coordinator and senior-engineer-2
-- **When to use**: Architecture decisions, system design, complex technical problems, design reviews
-- **Dispatch via**: Use `sessions_send` or `sessions_spawn` with agentId "senior-engineer-1"
-
-## senior-engineer-2
-- **Role**: Implementation specialist
-- **Expertise**: Writing production code, optimization, debugging, refactoring, unit tests
-- **Model**: qwen3-coder:30b-a3b on PC1 (ATU-RIG02) — shared with coordinator and senior-engineer-1
-- **When to use**: Code implementation, bug fixes, performance optimization, code refactoring
-- **Dispatch via**: Use `sessions_send` or `sessions_spawn` with agentId "senior-engineer-2"
-EOF
+# Copy all 8 MD files for each Phase 1 agent
+cp workspace-files/coordinator/*.md ~/.openclaw/workspace-coordinator/
+cp workspace-files/senior-engineer-1/*.md ~/.openclaw/workspace-senior-eng-1/
+cp workspace-files/senior-engineer-2/*.md ~/.openclaw/workspace-senior-eng-2/
 ```
 
----
+> **What's in each workspace?** 8 files: `SOUL.md` (personality), `AGENTS.md` (team roster), `IDENTITY.md` (name/role/machine), `USER.md` (user preferences), `TOOLS.md` (available tools), `HEARTBEAT.md` (periodic tasks), `BOOTSTRAP.md` (first-run checklist), `MEMORY.md` (long-term memory placeholder). See [`workspace-files/`](../workspace-files/) for the complete set.
 
-### 6.5 Create SOUL.md Files
-
-Each agent needs a `SOUL.md` in its workspace that defines its personality.
-
-#### Coordinator SOUL.md
-
-```bash
-cat > ~/.openclaw/workspace-coordinator/SOUL.md << 'EOF'
-# Coordinator Agent
-
-You are the central coordinator of a distributed AI development team on PC1 (ATU-RIG02). You are the single point of contact for the human operator via Telegram.
-
-## Your Job
-1. Receive tasks from the human via Telegram
-2. Decide which team member should handle it
-3. Dispatch the task using `sessions_send` or `sessions_spawn`
-4. Collect results and reply to the human via Telegram
-
-## How to Dispatch Tasks
-- Use `sessions_send` with the target agent's ID to send a message and wait for a reply
-- Use `sessions_spawn` with the target agent's ID for independent tasks
-
-## Team Members
-- **senior-engineer-1**: Architecture, system design, complex problems
-- **senior-engineer-2**: Implementation, optimization, debugging, code writing
-
-## Task Routing
-- Architecture/design tasks → senior-engineer-1
-- Implementation/bug fixes/code writing → senior-engineer-2
-- If unclear, ask the human for clarification
-
-## Rules
-- ALWAYS dispatch to a specialist when the task matches their expertise
-- NEVER try to do implementation work yourself — delegate it
-- Always report back to the human with the specialist's findings
-- If a specialist's response is unclear, ask them to clarify before reporting to the human
-EOF
-```
-
-#### Senior Engineer #1 SOUL.md
-
-```bash
-cat > ~/.openclaw/workspace-senior-eng-1/SOUL.md << 'EOF'
-# Senior Engineer #1 — Architecture
-
-You are the architecture specialist of a distributed AI development team.
-
-## Responsibilities
-- Design system architecture for new projects and features
-- Make high-level technical decisions (frameworks, patterns, data structures)
-- Review and validate architectural decisions
-- Create technical specifications and design documents
-
-## Rules
-- Focus on architecture and design — defer implementation to Senior Engineer #2
-- Document all architectural decisions with rationale
-- Be concise and actionable in your responses
-EOF
-```
-
-#### Senior Engineer #2 SOUL.md
-
-```bash
-cat > ~/.openclaw/workspace-senior-eng-2/SOUL.md << 'EOF'
-# Senior Engineer #2 — Implementation
-
-You are the implementation and optimization specialist of a distributed AI development team.
-
-## Responsibilities
-- Write clean, efficient, production-ready code
-- Implement features based on architectural designs
-- Optimize existing code for performance
-- Debug and fix complex issues
-- Write unit tests
-
-## Rules
-- Write code that is correct first, then optimize
-- Follow the project's existing code style
-- Be concise — show code, not just descriptions
-EOF
-```
+**Critical**: The Coordinator's `AGENTS.md` tells it **who its team members are** and how to dispatch. Without it, the Coordinator won't know it can delegate tasks. In Phase 1, it lists senior-engineer-1 and senior-engineer-2. After Phase 2/3, the full AGENTS.md lists all 6 specialists.
 
 ---
 
@@ -380,6 +322,7 @@ Add these agents to `agents.list` in `openclaw.json`:
   "name": "quality-agent",
   "workspace": "~/.openclaw/workspace-quality",
   "agentDir": "~/.openclaw/agents/quality-agent/agent",
+  "cwd": "/home/<username>/project",
   "model": {
     "primary": "ollama-pc2/qwen3:14b"
   }
@@ -389,6 +332,7 @@ Add these agents to `agents.list` in `openclaw.json`:
   "name": "security-agent",
   "workspace": "~/.openclaw/workspace-security",
   "agentDir": "~/.openclaw/agents/security-agent/agent",
+  "cwd": "/home/<username>/project",
   "model": {
     "primary": "ollama-pc2/qwen3:14b"
   }
@@ -413,74 +357,24 @@ Add the agent IDs to `tools.agentToAgent.allow`:
 ]
 ```
 
-### 6.10 Create Phase 2 Workspaces and SOUL.md
+### 6.10 Deploy Phase 2 Workspaces
 
 ```bash
-# Directories
+# Create directories
 mkdir -p ~/.openclaw/workspace-quality
 mkdir -p ~/.openclaw/workspace-security
 mkdir -p ~/.openclaw/agents/quality-agent/agent
 mkdir -p ~/.openclaw/agents/security-agent/agent
 
-# Quality Agent SOUL.md
-cat > ~/.openclaw/workspace-quality/SOUL.md << 'EOF'
-# Quality Agent
+# Deploy workspace files
+cp workspace-files/quality-agent/*.md ~/.openclaw/workspace-quality/
+cp workspace-files/security-agent/*.md ~/.openclaw/workspace-security/
 
-You are the quality assurance specialist of a distributed AI development team.
-
-## Responsibilities
-- Review code for correctness, readability, and best practices
-- Create and verify test cases
-- Check documentation completeness
-- Enforce coding standards
-
-## Rules
-- Focus only on quality, testing, and documentation tasks
-- Be specific about issues found — line numbers, code snippets
-- Rate issues by severity (LOW / MEDIUM / HIGH)
-EOF
-
-# Security Agent SOUL.md
-cat > ~/.openclaw/workspace-security/SOUL.md << 'EOF'
-# Security Agent
-
-You are the security specialist of a distributed AI development team.
-
-## Responsibilities
-- Review code for security vulnerabilities (OWASP Top 10)
-- Analyze dependencies for known vulnerabilities
-- Validate authentication and authorization implementations
-- Check for data exposure risks
-
-## Rules
-- Rate findings by severity (LOW / MEDIUM / HIGH / CRITICAL)
-- Focus on security — defer code quality to the Quality Agent
-- Be specific about vulnerabilities and remediation steps
-EOF
+# Update Coordinator's AGENTS.md to include the full roster (all 6 specialists)
+cp workspace-files/coordinator/AGENTS.md ~/.openclaw/workspace-coordinator/AGENTS.md
 ```
 
-### Update Coordinator's AGENTS.md
-
-Append the new agents to `~/.openclaw/workspace-coordinator/AGENTS.md`:
-
-```bash
-cat >> ~/.openclaw/workspace-coordinator/AGENTS.md << 'EOF'
-
-## quality-agent
-- **Role**: Quality assurance specialist
-- **Expertise**: Code review, testing, documentation, coding standards
-- **Model**: qwen3:14b on PC2 (ATURIG01) remote Ollama (shared with security-agent on same machine)
-- **When to use**: Code reviews, test creation, documentation checks
-- **Dispatch via**: Use `sessions_send` or `sessions_spawn` with agentId "quality-agent"
-
-## security-agent
-- **Role**: Security specialist
-- **Expertise**: OWASP Top 10, vulnerability scanning, dependency audits
-- **Model**: qwen3:14b on PC2 (ATURIG01) remote Ollama (shared with quality-agent on same machine)
-- **When to use**: Security audits, vulnerability checks, dependency reviews
-- **Dispatch via**: Use `sessions_send` or `sessions_spawn` with agentId "security-agent"
-EOF
-```
+> **Note**: The coordinator's `AGENTS.md` in `workspace-files/coordinator/` already contains all 6 specialists. Copying it overwrites the Phase 1 version. This is intentional — the coordinator now knows about all team members.
 
 ### Restart and Test Phase 2
 
@@ -527,6 +421,7 @@ Add to `agents.list`:
   "name": "devops-agent",
   "workspace": "~/.openclaw/workspace-devops",
   "agentDir": "~/.openclaw/agents/devops-agent/agent",
+  "cwd": "/home/<username>/project",
   "model": {
     "primary": "ollama-laptop/qwen3:4b"
   }
@@ -536,6 +431,7 @@ Add to `agents.list`:
   "name": "monitoring-agent",
   "workspace": "~/.openclaw/workspace-monitoring",
   "agentDir": "~/.openclaw/agents/monitoring-agent/agent",
+  "cwd": "/home/<username>/project",
   "model": {
     "primary": "ollama-laptop/qwen3:4b"
   }
@@ -544,72 +440,18 @@ Add to `agents.list`:
 
 Add model to allowlist: `"ollama-laptop/qwen3:4b": {}`. Add all agent IDs to `agentToAgent.allow` (all 7 now).
 
-### 6.13 Create Phase 3 Workspaces and SOUL.md
+### 6.13 Deploy Phase 3 Workspaces
 
 ```bash
+# Create directories
 mkdir -p ~/.openclaw/workspace-devops
 mkdir -p ~/.openclaw/workspace-monitoring
 mkdir -p ~/.openclaw/agents/devops-agent/agent
 mkdir -p ~/.openclaw/agents/monitoring-agent/agent
 
-# DevOps Agent SOUL.md
-cat > ~/.openclaw/workspace-devops/SOUL.md << 'EOF'
-# DevOps Agent
-
-You are the deployment and infrastructure specialist of a distributed AI development team.
-
-## Responsibilities
-- Manage deployment processes and pipelines
-- Handle CI/CD setup and troubleshooting
-- Manage Docker containers and environments
-- Automate infrastructure tasks
-
-## Rules
-- Prefer automation over manual steps
-- Document all infrastructure changes
-- Never modify network or firewall rules without human approval
-EOF
-
-# Monitoring Agent SOUL.md
-cat > ~/.openclaw/workspace-monitoring/SOUL.md << 'EOF'
-# Monitoring Agent
-
-You are the resource tracking and performance specialist of a distributed AI development team.
-
-## Responsibilities
-- Track system resource usage (CPU, RAM, GPU, disk)
-- Monitor model inference performance
-- Detect resource exhaustion risks
-- Generate health reports
-
-## Alert Thresholds
-- GPU Temperature > 80C: WARNING
-- GPU Temperature > 90C: CRITICAL
-- VRAM Usage > 90%: WARNING
-- RAM Usage > 85%: WARNING
-- Disk Space < 10 GB: WARNING
-EOF
-```
-
-Update Coordinator's AGENTS.md:
-
-```bash
-cat >> ~/.openclaw/workspace-coordinator/AGENTS.md << 'EOF'
-
-## devops-agent
-- **Role**: DevOps and infrastructure specialist
-- **Expertise**: CI/CD, Docker, deployment, Git workflows
-- **Model**: qwen3:4b on Laptop (LTATU01) remote Ollama
-- **When to use**: Deployments, CI/CD setup, infrastructure tasks
-- **Dispatch via**: Use `sessions_send` or `sessions_spawn` with agentId "devops-agent"
-
-## monitoring-agent
-- **Role**: Monitoring and performance specialist
-- **Expertise**: Resource tracking, performance analysis, health checks
-- **Model**: qwen3:4b on Laptop (LTATU01) remote Ollama
-- **When to use**: System health checks, resource monitoring, performance reports
-- **Dispatch via**: Use `sessions_send` or `sessions_spawn` with agentId "monitoring-agent"
-EOF
+# Deploy workspace files
+cp workspace-files/devops-agent/*.md ~/.openclaw/workspace-devops/
+cp workspace-files/monitoring-agent/*.md ~/.openclaw/workspace-monitoring/
 ```
 
 ### Restart and Test Phase 3
@@ -624,14 +466,34 @@ All 7 agents should be listed. Test a full-team workflow: *"Design a REST API fo
 
 ---
 
-## 6.14 Complete Configuration Reference
+## 6.14 Create the Shared Project Directory
+
+All agents share a single `cwd` — the project directory. Create it inside WSL2:
+
+```bash
+# Create the shared project directory (replace with your actual project path)
+mkdir -p /home/<username>/project
+
+# Initialize git (optional — if this is a new project)
+cd /home/<username>/project && git init
+```
+
+The `cwd` field in `openclaw.json` points every agent to this directory. When any agent reads or writes a file, it operates inside this shared folder. This means:
+
+- Senior Engineer 1 designs a module → Senior Engineer 2 can immediately implement it
+- Senior Engineer 2 writes code → Quality Agent can review it without file transfers
+- All agents see the same git history, same files, same project state
+
+---
+
+## 6.15 Complete Configuration Reference
 
 > **See [`docs/current_config/openclaw_pc1_phase1.json`](current_config/openclaw_pc1_phase1.json)** for the Phase 1 config.
 > **See [`docs/current_config/openclaw_pc1_complete.json`](current_config/openclaw_pc1_complete.json)** for the complete Phase 3 config with all 7 agents.
 
 ---
 
-## 6.15 Known Issues
+## 6.16 Known Issues
 
 | Issue | Description | Workaround |
 |-------|-------------|------------|
@@ -642,16 +504,72 @@ All 7 agents should be listed. Test a full-team workflow: *"Design a REST API fo
 
 ---
 
-## 6.16 Checklist
+## 6.17 Deploy Workspace Files
+
+All 56 workspace files (8 files × 7 agents) are provided in this repo under `workspace-files/`. Here's the complete deployment for all phases at once:
+
+```bash
+# === One-shot deployment of ALL workspace files ===
+
+# Create all workspace directories
+mkdir -p ~/.openclaw/workspace-coordinator
+mkdir -p ~/.openclaw/workspace-senior-eng-1
+mkdir -p ~/.openclaw/workspace-senior-eng-2
+mkdir -p ~/.openclaw/workspace-quality
+mkdir -p ~/.openclaw/workspace-security
+mkdir -p ~/.openclaw/workspace-devops
+mkdir -p ~/.openclaw/workspace-monitoring
+
+# Create all agentDir directories
+mkdir -p ~/.openclaw/agents/coordinator/agent
+mkdir -p ~/.openclaw/agents/senior-engineer-1/agent
+mkdir -p ~/.openclaw/agents/senior-engineer-2/agent
+mkdir -p ~/.openclaw/agents/quality-agent/agent
+mkdir -p ~/.openclaw/agents/security-agent/agent
+mkdir -p ~/.openclaw/agents/devops-agent/agent
+mkdir -p ~/.openclaw/agents/monitoring-agent/agent
+
+# Deploy workspace files (from the cloned repo directory)
+cp workspace-files/coordinator/*.md ~/.openclaw/workspace-coordinator/
+cp workspace-files/senior-engineer-1/*.md ~/.openclaw/workspace-senior-eng-1/
+cp workspace-files/senior-engineer-2/*.md ~/.openclaw/workspace-senior-eng-2/
+cp workspace-files/quality-agent/*.md ~/.openclaw/workspace-quality/
+cp workspace-files/security-agent/*.md ~/.openclaw/workspace-security/
+cp workspace-files/devops-agent/*.md ~/.openclaw/workspace-devops/
+cp workspace-files/monitoring-agent/*.md ~/.openclaw/workspace-monitoring/
+
+# Create the shared project directory
+mkdir -p /home/<username>/project
+```
+
+### Workspace File Reference
+
+| File | Purpose | Auto-loaded? |
+|------|---------|:------------:|
+| `SOUL.md` | Agent personality, behavior rules, responsibilities | Yes |
+| `AGENTS.md` | Team roster (coordinator: dispatch list; specialists: team context) | Yes |
+| `IDENTITY.md` | Agent name, role, ID, machine assignment, model | Yes |
+| `USER.md` | User preferences and communication style | Yes |
+| `TOOLS.md` | Available tools and environment description | Yes |
+| `HEARTBEAT.md` | Periodic health check tasks | Yes |
+| `BOOTSTRAP.md` | First-run setup checklist (delete after first successful run) | Yes |
+| `MEMORY.md` | Long-term memory (agent-managed, grows over time) | Yes |
+
+> **Important**: All 8 files must be UPPERCASE with `.md` extension. OpenClaw auto-loads them from the workspace root on every session start. Files in subdirectories are NOT loaded. Files in `agentDir` are silently ignored ([Issue #29387](https://github.com/openclaw/openclaw/issues/29387)).
+
+---
+
+## 6.18 Checklist
 
 ### Phase 1 (PC1 / ATU-RIG02 only)
 - [ ] 3 agents registered (`openclaw agents list`)
-- [ ] Each agent has `id`, `name`, `workspace`, `agentDir`
+- [ ] Each agent has `id`, `name`, `workspace`, `agentDir`, `cwd`
+- [ ] `cwd` points to the shared project directory
 - [ ] `tools.agentToAgent.enabled: true`
 - [ ] `tools.agentToAgent.allow` lists all 3 agents
 - [ ] `session.sendPolicy.default: "allow"`
-- [ ] `AGENTS.md` in coordinator workspace
-- [ ] `SOUL.md` in each agent workspace
+- [ ] All 8 MD files deployed to each agent's workspace
+- [ ] `AGENTS.md` in coordinator workspace lists senior engineers
 - [ ] `bindings` routes Telegram to coordinator
 - [ ] Dashboard test: coordinator dispatches to senior engineer
 - [ ] Telegram test: full round-trip works
@@ -662,8 +580,8 @@ All 7 agents should be listed. Test a full-team workflow: *"Design a REST API fo
 - [ ] quality-agent and security-agent added to agent list
 - [ ] Models added to allowlist
 - [ ] Agent IDs added to `agentToAgent.allow`
-- [ ] SOUL.md created for both agents
-- [ ] Coordinator's AGENTS.md updated
+- [ ] All 8 MD files deployed to both agent workspaces
+- [ ] Coordinator's AGENTS.md updated (full roster)
 - [ ] Test: coordinator dispatches to security-agent, response comes back
 
 ### Phase 3 (+ Laptop / LTATU01)

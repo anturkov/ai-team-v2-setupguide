@@ -1,5 +1,5 @@
 {
-  "_comment": "Complete config — All 7 agents. 3 models: qwen3-coder:30b-a3b (PC1), qwen3:14b (PC2), qwen3:4b (Laptop). Place at ~/.openclaw/openclaw.json inside WSL2 on PC1 (ATU-RIG02).",
+  "_comment": "Complete config — All 7 agents. 3 models: qwen3-coder:30b-a3b (PC1), qwen3:14b (PC2), qwen3:4b (Laptop). Each agent has its own workspace (persona files) + shared cwd (project dir). Place at ~/.openclaw/openclaw.json inside WSL2 on PC1 (ATU-RIG02). Replace /home/<username>/project with your actual path.",
   "models": {
     "providers": {
       "ollama": {
@@ -46,25 +46,29 @@
         "name": "coordinator",
         "default": true,
         "workspace": "~/.openclaw/workspace-coordinator",
-        "agentDir": "~/.openclaw/agents/coordinator/agent"
+        "agentDir": "~/.openclaw/agents/coordinator/agent",
+        "cwd": "/home/<username>/project"
       },
       {
         "id": "senior-engineer-1",
         "name": "senior-engineer-1",
         "workspace": "~/.openclaw/workspace-senior-eng-1",
-        "agentDir": "~/.openclaw/agents/senior-engineer-1/agent"
+        "agentDir": "~/.openclaw/agents/senior-engineer-1/agent",
+        "cwd": "/home/<username>/project"
       },
       {
         "id": "senior-engineer-2",
         "name": "senior-engineer-2",
         "workspace": "~/.openclaw/workspace-senior-eng-2",
-        "agentDir": "~/.openclaw/agents/senior-engineer-2/agent"
+        "agentDir": "~/.openclaw/agents/senior-engineer-2/agent",
+        "cwd": "/home/<username>/project"
       },
       {
         "id": "quality-agent",
         "name": "quality-agent",
         "workspace": "~/.openclaw/workspace-quality",
         "agentDir": "~/.openclaw/agents/quality-agent/agent",
+        "cwd": "/home/<username>/project",
         "model": {
           "primary": "ollama-pc2/qwen3:14b"
         }
@@ -74,6 +78,7 @@
         "name": "security-agent",
         "workspace": "~/.openclaw/workspace-security",
         "agentDir": "~/.openclaw/agents/security-agent/agent",
+        "cwd": "/home/<username>/project",
         "model": {
           "primary": "ollama-pc2/qwen3:14b"
         }
@@ -83,6 +88,7 @@
         "name": "devops-agent",
         "workspace": "~/.openclaw/workspace-devops",
         "agentDir": "~/.openclaw/agents/devops-agent/agent",
+        "cwd": "/home/<username>/project",
         "model": {
           "primary": "ollama-laptop/qwen3:4b"
         }
@@ -92,6 +98,7 @@
         "name": "monitoring-agent",
         "workspace": "~/.openclaw/workspace-monitoring",
         "agentDir": "~/.openclaw/agents/monitoring-agent/agent",
+        "cwd": "/home/<username>/project",
         "model": {
           "primary": "ollama-laptop/qwen3:4b"
         }
