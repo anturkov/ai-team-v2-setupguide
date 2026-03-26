@@ -1,5 +1,5 @@
 {
-  "_comment": "Complete config — All 7 agents across PC1 (ATU-RIG02), PC2 (ATURIG01), Laptop (LTATU01). Place at ~/.openclaw/openclaw.json inside WSL2 on PC1.",
+  "_comment": "Complete config — All 7 agents. 3 models: qwen3-coder:30b-a3b (PC1), qwen3:14b (PC2), qwen3:4b (Laptop). Place at ~/.openclaw/openclaw.json inside WSL2 on PC1 (ATU-RIG02).",
   "models": {
     "providers": {
       "ollama": {
@@ -22,16 +22,12 @@
   "agents": {
     "defaults": {
       "model": {
-        "primary": "ollama/coordinator:latest"
+        "primary": "ollama/qwen3-coder:30b-a3b"
       },
       "models": {
-        "ollama/coordinator:latest": {},
-        "ollama/senior-eng-1:latest": {},
-        "ollama/senior-eng-2:latest": {},
-        "ollama-pc2/quality-agent:latest": {},
-        "ollama-pc2/security-agent:latest": {},
-        "ollama-laptop/devops-agent:latest": {},
-        "ollama-laptop/monitoring-agent:latest": {}
+        "ollama/qwen3-coder:30b-a3b": {},
+        "ollama-pc2/qwen3:14b": {},
+        "ollama-laptop/qwen3:4b": {}
       },
       "workspace": "~/.openclaw/workspace",
       "timeoutSeconds": 600,
@@ -56,19 +52,13 @@
         "id": "senior-engineer-1",
         "name": "senior-engineer-1",
         "workspace": "~/.openclaw/workspace-senior-eng-1",
-        "agentDir": "~/.openclaw/agents/senior-engineer-1/agent",
-        "model": {
-          "primary": "ollama/senior-eng-1:latest"
-        }
+        "agentDir": "~/.openclaw/agents/senior-engineer-1/agent"
       },
       {
         "id": "senior-engineer-2",
         "name": "senior-engineer-2",
         "workspace": "~/.openclaw/workspace-senior-eng-2",
-        "agentDir": "~/.openclaw/agents/senior-engineer-2/agent",
-        "model": {
-          "primary": "ollama/senior-eng-2:latest"
-        }
+        "agentDir": "~/.openclaw/agents/senior-engineer-2/agent"
       },
       {
         "id": "quality-agent",
@@ -76,7 +66,7 @@
         "workspace": "~/.openclaw/workspace-quality",
         "agentDir": "~/.openclaw/agents/quality-agent/agent",
         "model": {
-          "primary": "ollama-pc2/quality-agent:latest"
+          "primary": "ollama-pc2/qwen3:14b"
         }
       },
       {
@@ -85,7 +75,7 @@
         "workspace": "~/.openclaw/workspace-security",
         "agentDir": "~/.openclaw/agents/security-agent/agent",
         "model": {
-          "primary": "ollama-pc2/security-agent:latest"
+          "primary": "ollama-pc2/qwen3:14b"
         }
       },
       {
@@ -94,7 +84,7 @@
         "workspace": "~/.openclaw/workspace-devops",
         "agentDir": "~/.openclaw/agents/devops-agent/agent",
         "model": {
-          "primary": "ollama-laptop/devops-agent:latest"
+          "primary": "ollama-laptop/qwen3:4b"
         }
       },
       {
@@ -103,7 +93,7 @@
         "workspace": "~/.openclaw/workspace-monitoring",
         "agentDir": "~/.openclaw/agents/monitoring-agent/agent",
         "model": {
-          "primary": "ollama-laptop/monitoring-agent:latest"
+          "primary": "ollama-laptop/qwen3:4b"
         }
       }
     ]

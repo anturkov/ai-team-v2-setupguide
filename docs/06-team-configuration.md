@@ -57,12 +57,10 @@ Here is the **complete Phase 1 configuration**. Merge these sections into your e
   "agents": {
     "defaults": {
       "model": {
-        "primary": "ollama/coordinator:latest"
+        "primary": "ollama/qwen3-coder:30b-a3b"
       },
       "models": {
-        "ollama/coordinator:latest": {},
-        "ollama/senior-eng-1:latest": {},
-        "ollama/senior-eng-2:latest": {}
+        "ollama/qwen3-coder:30b-a3b": {}
       },
       "workspace": "~/.openclaw/workspace",
       "timeoutSeconds": 600,
@@ -87,19 +85,13 @@ Here is the **complete Phase 1 configuration**. Merge these sections into your e
         "id": "senior-engineer-1",
         "name": "senior-engineer-1",
         "workspace": "~/.openclaw/workspace-senior-eng-1",
-        "agentDir": "~/.openclaw/agents/senior-engineer-1/agent",
-        "model": {
-          "primary": "ollama/senior-eng-1:latest"
-        }
+        "agentDir": "~/.openclaw/agents/senior-engineer-1/agent"
       },
       {
         "id": "senior-engineer-2",
         "name": "senior-engineer-2",
         "workspace": "~/.openclaw/workspace-senior-eng-2",
-        "agentDir": "~/.openclaw/agents/senior-engineer-2/agent",
-        "model": {
-          "primary": "ollama/senior-eng-2:latest"
-        }
+        "agentDir": "~/.openclaw/agents/senior-engineer-2/agent"
       }
     ]
   },
@@ -197,14 +189,14 @@ cat > ~/.openclaw/workspace-coordinator/AGENTS.md << 'EOF'
 ## senior-engineer-1
 - **Role**: Architecture specialist
 - **Expertise**: System design, API design, database schema, design patterns, scalability
-- **Model**: deepseek-coder-v2:16b on PC1 (ATU-RIG02) local Ollama
+- **Model**: qwen3-coder:30b-a3b on PC1 (ATU-RIG02) — shared with coordinator and senior-engineer-2
 - **When to use**: Architecture decisions, system design, complex technical problems, design reviews
 - **Dispatch via**: Use `sessions_send` or `sessions_spawn` with agentId "senior-engineer-1"
 
 ## senior-engineer-2
 - **Role**: Implementation specialist
 - **Expertise**: Writing production code, optimization, debugging, refactoring, unit tests
-- **Model**: codellama:13b on PC1 (ATU-RIG02) local Ollama
+- **Model**: qwen3-coder:30b-a3b on PC1 (ATU-RIG02) — shared with coordinator and senior-engineer-1
 - **When to use**: Code implementation, bug fixes, performance optimization, code refactoring
 - **Dispatch via**: Use `sessions_send` or `sessions_spawn` with agentId "senior-engineer-2"
 EOF
@@ -328,7 +320,7 @@ All 3 agents should appear. Each should have its own workspace and session store
 You (Telegram) → "Explain SOLID principles"
     → Coordinator receives message
     → Coordinator uses sessions_send to senior-engineer-1
-    → Senior Engineer #1 generates response using deepseek-coder-v2:16b
+    → Senior Engineer #1 generates response using qwen3-coder:30b-a3b (shared with coordinator)
     → Response returns to Coordinator
     → Coordinator replies in Telegram with the answer
 ```
@@ -389,7 +381,7 @@ Add these agents to `agents.list` in `openclaw.json`:
   "workspace": "~/.openclaw/workspace-quality",
   "agentDir": "~/.openclaw/agents/quality-agent/agent",
   "model": {
-    "primary": "ollama-pc2/quality-agent:latest"
+    "primary": "ollama-pc2/qwen3:14b"
   }
 },
 {
@@ -398,16 +390,15 @@ Add these agents to `agents.list` in `openclaw.json`:
   "workspace": "~/.openclaw/workspace-security",
   "agentDir": "~/.openclaw/agents/security-agent/agent",
   "model": {
-    "primary": "ollama-pc2/security-agent:latest"
+    "primary": "ollama-pc2/qwen3:14b"
   }
 }
 ```
 
-Add models to the allowlist in `agents.defaults.models`:
+Add model to the allowlist in `agents.defaults.models`:
 
 ```json
-"ollama-pc2/quality-agent:latest": {},
-"ollama-pc2/security-agent:latest": {}
+"ollama-pc2/qwen3:14b": {}
 ```
 
 Add the agent IDs to `tools.agentToAgent.allow`:
@@ -478,14 +469,14 @@ cat >> ~/.openclaw/workspace-coordinator/AGENTS.md << 'EOF'
 ## quality-agent
 - **Role**: Quality assurance specialist
 - **Expertise**: Code review, testing, documentation, coding standards
-- **Model**: qwen2.5-coder:7b on PC2 (ATURIG01) remote Ollama
+- **Model**: qwen3:14b on PC2 (ATURIG01) remote Ollama (shared with security-agent on same machine)
 - **When to use**: Code reviews, test creation, documentation checks
 - **Dispatch via**: Use `sessions_send` or `sessions_spawn` with agentId "quality-agent"
 
 ## security-agent
 - **Role**: Security specialist
 - **Expertise**: OWASP Top 10, vulnerability scanning, dependency audits
-- **Model**: mistral:7b on PC2 (ATURIG01) remote Ollama
+- **Model**: qwen3:14b on PC2 (ATURIG01) remote Ollama (shared with quality-agent on same machine)
 - **When to use**: Security audits, vulnerability checks, dependency reviews
 - **Dispatch via**: Use `sessions_send` or `sessions_spawn` with agentId "security-agent"
 EOF
@@ -537,7 +528,7 @@ Add to `agents.list`:
   "workspace": "~/.openclaw/workspace-devops",
   "agentDir": "~/.openclaw/agents/devops-agent/agent",
   "model": {
-    "primary": "ollama-laptop/devops-agent:latest"
+    "primary": "ollama-laptop/qwen3:4b"
   }
 },
 {
@@ -546,12 +537,12 @@ Add to `agents.list`:
   "workspace": "~/.openclaw/workspace-monitoring",
   "agentDir": "~/.openclaw/agents/monitoring-agent/agent",
   "model": {
-    "primary": "ollama-laptop/monitoring-agent:latest"
+    "primary": "ollama-laptop/qwen3:4b"
   }
 }
 ```
 
-Add to allowlist and `agentToAgent.allow` (all 7 agents now).
+Add model to allowlist: `"ollama-laptop/qwen3:4b": {}`. Add all agent IDs to `agentToAgent.allow` (all 7 now).
 
 ### 6.13 Create Phase 3 Workspaces and SOUL.md
 
@@ -608,14 +599,14 @@ cat >> ~/.openclaw/workspace-coordinator/AGENTS.md << 'EOF'
 ## devops-agent
 - **Role**: DevOps and infrastructure specialist
 - **Expertise**: CI/CD, Docker, deployment, Git workflows
-- **Model**: qwen2.5:3b on Laptop (LTATU01) remote Ollama
+- **Model**: qwen3:4b on Laptop (LTATU01) remote Ollama
 - **When to use**: Deployments, CI/CD setup, infrastructure tasks
 - **Dispatch via**: Use `sessions_send` or `sessions_spawn` with agentId "devops-agent"
 
 ## monitoring-agent
 - **Role**: Monitoring and performance specialist
 - **Expertise**: Resource tracking, performance analysis, health checks
-- **Model**: phi3:3.8b on Laptop (LTATU01) remote Ollama
+- **Model**: qwen3:4b on Laptop (LTATU01) remote Ollama
 - **When to use**: System health checks, resource monitoring, performance reports
 - **Dispatch via**: Use `sessions_send` or `sessions_spawn` with agentId "monitoring-agent"
 EOF

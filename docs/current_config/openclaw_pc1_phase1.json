@@ -1,5 +1,5 @@
 {
-  "_comment": "Phase 1 config — PC1 (ATU-RIG02) only: Coordinator + Senior Engineers. Place at ~/.openclaw/openclaw.json inside WSL2.",
+  "_comment": "Phase 1 config — PC1 (ATU-RIG02) only. 1 model: qwen3-coder:30b-a3b shared by all 3 agents. Place at ~/.openclaw/openclaw.json inside WSL2.",
   "models": {
     "providers": {
       "ollama": {
@@ -12,12 +12,10 @@
   "agents": {
     "defaults": {
       "model": {
-        "primary": "ollama/coordinator:latest"
+        "primary": "ollama/qwen3-coder:30b-a3b"
       },
       "models": {
-        "ollama/coordinator:latest": {},
-        "ollama/senior-eng-1:latest": {},
-        "ollama/senior-eng-2:latest": {}
+        "ollama/qwen3-coder:30b-a3b": {}
       },
       "workspace": "~/.openclaw/workspace",
       "timeoutSeconds": 600,
@@ -42,19 +40,13 @@
         "id": "senior-engineer-1",
         "name": "senior-engineer-1",
         "workspace": "~/.openclaw/workspace-senior-eng-1",
-        "agentDir": "~/.openclaw/agents/senior-engineer-1/agent",
-        "model": {
-          "primary": "ollama/senior-eng-1:latest"
-        }
+        "agentDir": "~/.openclaw/agents/senior-engineer-1/agent"
       },
       {
         "id": "senior-engineer-2",
         "name": "senior-engineer-2",
         "workspace": "~/.openclaw/workspace-senior-eng-2",
-        "agentDir": "~/.openclaw/agents/senior-engineer-2/agent",
-        "model": {
-          "primary": "ollama/senior-eng-2:latest"
-        }
+        "agentDir": "~/.openclaw/agents/senior-engineer-2/agent"
       }
     ]
   },

@@ -44,14 +44,13 @@ This guide follows a **phased approach**:
 │  ┌─ WSL2 (Ubuntu) ──────────────────────────────────────────────┐   │
 │  │  OpenClaw GATEWAY (:18789)                                    │   │
 │  │                                                               │   │
-│  │  Agents:                                                      │   │
-│  │  ├── Coordinator        → ollama/coordinator:latest           │   │
-│  │  ├── Senior Engineer #1 → ollama/senior-eng-1:latest          │   │
-│  │  ├── Senior Engineer #2 → ollama/senior-eng-2:latest          │   │
-│  │  ├── Quality Agent      → ollama-pc2/quality-agent:latest     │   │
-│  │  ├── Security Agent     → ollama-pc2/security-agent:latest    │   │
-│  │  ├── DevOps Agent       → ollama-laptop/devops-agent:latest   │   │
-│  │  └── Monitoring Agent   → ollama-laptop/monitoring-agent:latest│   │
+│  │  Agents (all 7 registered here):                              │   │
+│  │  ├── Coordinator        ─┐                                    │   │
+│  │  ├── Senior Engineer #2  ┘→ ollama/qwen3-coder:30b-a3b       │   │
+│  │  ├── Quality Agent      ─┐                                    │   │
+│  │  ├── Security Agent      ┘→ ollama-pc2/qwen3:14b             │   │
+│  │  ├── DevOps Agent       ─┐                                    │   │
+│  │  └── Monitoring Agent    ┘→ ollama-laptop/qwen3:4b           │   │
 │  │                                                               │   │
 │  │  Channels: Telegram Bot                                       │   │
 │  │  Agent-to-Agent: sessions_send / sessions_spawn               │   │
@@ -59,9 +58,8 @@ This guide follows a **phased approach**:
 │                              │ HTTP (localhost:11434)                 │
 │  ┌───────────────────────────▼──────────────────────────────────┐   │
 │  │  Ollama (Windows native) :11434                               │   │
-│  │  - coordinator:latest (qwen2.5-coder:32b)                     │   │
-│  │  - senior-eng-1:latest (deepseek-coder-v2:16b)                │   │
-│  │  - senior-eng-2:latest (codellama:13b)                        │   │
+│  │  ONE model loaded permanently:                                │   │
+│  │  qwen3-coder:30b-a3b (~21GB VRAM, NUM_PARALLEL=2)            │   │
 │  └──────────────────────────────────────────────────────────────┘   │
 └──────────┬──────────────────────────────┬───────────────────────────┘
            │ HTTP (:11434)                │ HTTP (:11434)
@@ -73,8 +71,8 @@ This guide follows a **phased approach**:
 │                            │  │                                  │
 │  Ollama (Windows native)   │  │  Ollama (Windows native)         │
 │  :11434                    │  │  :11434                          │
-│  - quality-agent:latest    │  │  - devops-agent:latest           │
-│  - security-agent:latest   │  │  - monitoring-agent:latest       │
+│  ONE model loaded:         │  │  ONE model loaded:               │
+│  qwen3:14b (~10GB VRAM)   │  │  qwen3:4b (~3GB VRAM)           │
 └────────────────────────────┘  └──────────────────────────────────┘
 ```
 
@@ -82,31 +80,33 @@ This guide follows a **phased approach**:
 
 - **OpenClaw runs in WSL2** on PC1 (ATU-RIG02) only. PC2 and Laptop just run Ollama.
 - **Ollama runs on Windows native** on all machines (simpler GPU access).
-- **No Nodes needed.** PC2 and Laptop are just Ollama HTTP servers.
-- **No fallbacks.** Each agent has exactly one model on one machine.
+- **3 models total** — one per machine, permanently loaded in VRAM. Multiple agents share the same model.
+- **All Qwen3 family** — consistent tool-calling behavior across all machines.
+- **No Nodes, no fallbacks, no model switching.** If a machine is down, the environment is down.
 - **All agent logic lives on PC1.** Only inference requests go to remote machines.
+- **Models stay loaded forever** (`OLLAMA_KEEP_ALIVE=-1`) to prevent agent timeouts.
 
 ---
 
 ## Machine Roles
 
-| Machine | Hostname | IP | Role | Runs OpenClaw? | Runs Ollama? |
-|---------|----------|-----|------|---------------|-------------|
-| PC1 | ATU-RIG02 | 192.168.1.106 | Gateway + 3 agents + Telegram | Yes (WSL2) | Yes (Windows) |
-| PC2 | ATURIG01 | 192.168.1.112 | Remote Ollama server | No | Yes (Windows) |
-| Laptop | LTATU01 | 192.168.1.113 | Remote Ollama server | No | Yes (Windows) |
+| Machine | Hostname | IP | GPU | Role | Model |
+|---------|----------|-----|-----|------|-------|
+| PC1 | ATU-RIG02 | 192.168.1.106 | RTX 4090 24GB | Gateway + Telegram | `qwen3-coder:30b-a3b` (~21GB) |
+| PC2 | ATURIG01 | 192.168.1.112 | RTX 2080 Ti 11GB | Remote Ollama | `qwen3:14b` (~10GB) |
+| Laptop | LTATU01 | 192.168.1.113 | Quadro T2000 4GB | Remote Ollama | `qwen3:4b` (~3GB) |
 
 ## Agent Roster
 
-| Agent | Machine | Model | Base Model | Purpose |
-|-------|---------|-------|------------|---------|
-| coordinator | PC1 (ATU-RIG02) | coordinator:latest | qwen2.5-coder:32b | Central command, Telegram interface, task dispatch |
-| senior-engineer-1 | PC1 (ATU-RIG02) | senior-eng-1:latest | deepseek-coder-v2:16b | Architecture, system design |
-| senior-engineer-2 | PC1 (ATU-RIG02) | senior-eng-2:latest | codellama:13b | Implementation, optimization |
-| quality-agent | PC2 (ATURIG01) | quality-agent:latest | qwen2.5-coder:7b | Code review, testing |
-| security-agent | PC2 (ATURIG01) | security-agent:latest | mistral:7b | Security analysis |
-| devops-agent | Laptop (LTATU01) | devops-agent:latest | qwen2.5:3b | Deployment, CI/CD |
-| monitoring-agent | Laptop (LTATU01) | monitoring-agent:latest | phi3:3.8b | Resource tracking |
+| Agent | Machine | Shared Model | Purpose |
+|-------|---------|-------------|---------|
+| coordinator | PC1 (ATU-RIG02) | `qwen3-coder:30b-a3b` | Central command, Telegram, task dispatch |
+| senior-engineer-1 | PC1 (ATU-RIG02) | `qwen3-coder:30b-a3b` | Architecture, system design |
+| senior-engineer-2 | PC1 (ATU-RIG02) | `qwen3-coder:30b-a3b` | Implementation, optimization, code writing |
+| quality-agent | PC2 (ATURIG01) | `qwen3:14b` | Code review, testing |
+| security-agent | PC2 (ATURIG01) | `qwen3:14b` | Security analysis |
+| devops-agent | Laptop (LTATU01) | `qwen3:4b` | Deployment, CI/CD |
+| monitoring-agent | Laptop (LTATU01) | `qwen3:4b` | Resource tracking |
 
 ---
 
